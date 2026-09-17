@@ -35,9 +35,9 @@ func NewRouter(
 	tokenManager := token.NewManager(cfg.Auth)
 	authMW := middleware.Auth(cfg.Auth, tokenManager, logger)
 	ah := handlers.NewAuthHandler(authService, logger)
-	qh := handlers.NewQueryHandler(queryService, logger)
+	qh := handlers.NewQueryHandler(queryService, nil, logger)
 	sh := handlers.NewSessionHandler(sessionService, logger)
-	sth := handlers.NewStreamHandler(streamService, logger)
+	sth := handlers.NewStreamHandler(streamService, nil, cfg.RAG.DocumentWaitReadyTimeout, logger)
 	atth := handlers.NewAttachmentHandler(attachmentService, logger)
 
 	public := r.Group("/auth")

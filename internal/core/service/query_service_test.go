@@ -102,7 +102,7 @@ func (f *fakeRouter) GenerateStreamWithFallback(_ context.Context, _ string, _ s
 type fakeRAG struct{}
 
 func (f *fakeRAG) Embed(_ context.Context, _ string) ([]float64, error) { return nil, nil }
-func (f *fakeRAG) Retrieve(_ context.Context, _ string, _ string, _ int) ([]model.RAGDocument, error) {
+func (f *fakeRAG) Retrieve(_ context.Context, _ string, _ string, _ string, _ int) ([]model.RAGDocument, error) {
 	return []model.RAGDocument{
 		{DocID: "d1", ChunkID: "c1", Content: "context", Score: 0.9},
 	}, nil
@@ -135,7 +135,7 @@ func TestQueryService_Query(t *testing.T) {
 	cache := newFakeCache()
 	sessionSvc := NewSessionService(repo, cache, nil)
 	queue := &fakeQueue{}
-	svc := NewQueryService(repo, sessionSvc, &fakeRouter{}, &fakeRAG{}, queue, cache, nil)
+	svc := NewQueryService(repo, sessionSvc, &fakeRouter{}, &fakeRAG{}, queue, cache, nil, nil, nil, nil)
 
 	out, err := svc.Query(context.Background(), model.QueryInput{
 		UserID:    "u1",
@@ -150,4 +150,11 @@ func TestQueryService_Query(t *testing.T) {
 	require.Len(t, out.Citations, 1)
 	require.Equal(t, 1, queue.taskCount)
 	require.Equal(t, 1, queue.resultCount)
+}
+
+func (f *fakeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {
+	return nil, false, nil
+}
+func (f *fakeCache) SetWindow(_ context.Context, _, _ string, _ []model.Message, _ time.Duration) error {
+	return nil
 }
