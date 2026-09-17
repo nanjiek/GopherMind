@@ -1,6 +1,6 @@
 # P1 Event Log、Projection 与 Surface 设计
 
-状态：P0 设计冻结，P1 实现输入  
+状态：P0 设计冻结，P1 实现输入
 数据库策略：新建空 PostgreSQL，不导入旧 MySQL 数据
 
 ## 1. 职责
