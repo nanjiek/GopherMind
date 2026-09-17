@@ -1,16 +1,23 @@
-# internal/queue/rabbitmq 设计说明
+# 包说明
 
-## 设计定位
-该模块承载异步任务链路，目标是在不阻塞在线请求的前提下保证消息处理可靠性。
+## 包作用
+- 实现异步消息生产消费、重试与死信处理。
+- 结合幂等控制避免重复消费副作用。
 
-## 核心设计思路
-1. 主队列 + 分级重试队列 + DLQ，形成可恢复且可观测的失败治理路径。
-2. 以 `idempotency_key` 为主线，结合 Redis 快速判重与 MySQL inbox 持久判重，实现“重复可接受、重复副作用不可接受”。
-3. 消费状态外显为 `processing/failed/succeeded/dead`，支持问题排查与人工重放。
+## 实现逻辑
+1. 生产者发布任务消息、结果消息、重试消息和死信消息。
+2. 消费者解析投递并执行业务处理。
+3. 失败按可重试与不可重试分流到不同通道。
+4. 通过幂等标记和收件箱状态保证重复消息可控。
 
-## 一致性取舍
-- 采用“至少一次投递 + 幂等消费”而非“精确一次”。
-- 跨 RabbitMQ 与 MySQL 不做分布式事务，通过 inbox 状态机和重试语义保证最终一致。
+## 关键接口
+```go
+type AMQPProducer struct
+func (p *AMQPProducer) PublishTask(ctx context.Context, message events.TaskMessage) error
+type Consumer struct
+func (c *Consumer) Start(ctx context.Context) error
+```
 
-## 演进策略
-后续可引入 outbox relay、重放工具与失败分桶，进一步降低人工介入成本。
+## 协作关系
+- 依赖消息契约模块定义载荷结构。
+- 依赖缓存和数据库模块记录处理状态。

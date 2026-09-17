@@ -120,6 +120,29 @@ func (r *SessionRepository) GetSession(ctx context.Context, userID string, sessi
 	return mapSession(sess), nil
 }
 
+// ListSessions reads latest sessions for current user ordered by activity time.
+func (r *SessionRepository) ListSessions(ctx context.Context, userID string, limit int) ([]model.Session, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	var sessions []SessionModel
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("last_message_at DESC, updated_at DESC").
+		Limit(limit).
+		Find(&sessions).Error; err != nil {
+		return nil, err
+	}
+	out := make([]model.Session, 0, len(sessions))
+	for _, sess := range sessions {
+		out = append(out, mapSession(sess))
+	}
+	return out, nil
+}
+
 // ListMessages 按时间顺序读取会话消息。
 func (r *SessionRepository) ListMessages(ctx context.Context, userID string, sessionID string) ([]model.Message, error) {
 	var sess SessionModel

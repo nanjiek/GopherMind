@@ -40,6 +40,15 @@ func (f *smokeRepo) AppendAssistantMessage(_ context.Context, _ string, _ string
 func (f *smokeRepo) GetSession(_ context.Context, _ string, _ string) (model.Session, error) {
 	return f.session, nil
 }
+func (f *smokeRepo) ListSessions(_ context.Context, userID string, limit int) ([]model.Session, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if f.session.UserID != userID {
+		return []model.Session{}, nil
+	}
+	return []model.Session{f.session}, nil
+}
 func (f *smokeRepo) ListMessages(_ context.Context, _ string, _ string) ([]model.Message, error) {
 	return f.msgs, nil
 }
@@ -74,7 +83,7 @@ func (s *smokeRouter) GenerateStreamWithFallback(_ context.Context, _ string, _ 
 type smokeRAG struct{}
 
 func (s *smokeRAG) Embed(_ context.Context, _ string) ([]float64, error) { return nil, nil }
-func (s *smokeRAG) Retrieve(_ context.Context, _ string, _ string, _ int) ([]model.RAGDocument, error) {
+func (s *smokeRAG) Retrieve(_ context.Context, _ string, _ string, _ string, _ int) ([]model.RAGDocument, error) {
 	return nil, nil
 }
 func (s *smokeRAG) Rerank(_ context.Context, _ string, docs []model.RAGDocument, _ int) ([]model.RAGDocument, error) {
@@ -105,8 +114,8 @@ func TestHTTPQuerySmoke(t *testing.T) {
 	repo := &smokeRepo{}
 	cache := &smokeCache{}
 	sessionSvc := service.NewSessionService(repo, cache, logger)
-	querySvc := service.NewQueryService(repo, sessionSvc, &smokeRouter{}, &smokeRAG{}, &smokeQueue{}, cache, logger)
-	streamSvc := service.NewStreamService(repo, sessionSvc, &smokeRouter{}, &smokeRAG{}, cache, logger)
+	querySvc := service.NewQueryService(repo, sessionSvc, &smokeRouter{}, &smokeRAG{}, &smokeQueue{}, cache, nil, nil, nil, logger)
+	streamSvc := service.NewStreamService(repo, sessionSvc, &smokeRouter{}, &smokeRAG{}, cache, nil, nil, nil, logger)
 
 	router := httptransport.NewRouter(cfg, logger, nil, nil, querySvc, sessionSvc, streamSvc)
 	body, _ := json.Marshal(httpcontracts.QueryRequest{
@@ -120,4 +129,11 @@ func TestHTTPQuerySmoke(t *testing.T) {
 
 	router.ServeHTTP(resp, req)
 	require.Equal(t, http.StatusOK, resp.Code)
+}
+
+func (f *smokeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {
+	return nil, false, nil
+}
+func (f *smokeCache) SetWindow(_ context.Context, _, _ string, _ []model.Message, _ time.Duration) error {
+	return nil
 }

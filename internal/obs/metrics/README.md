@@ -1,15 +1,22 @@
-# internal/obs/metrics 设计说明
+# 包说明
 
-## 设计定位
-该模块负责业务可观测埋点，目标是把“可观测语言”内建到业务路径。
+## 包作用
+- 集中定义和上报运行指标。
+- 覆盖请求性能、鉴权、消息队列与问答链路核心指标。
 
-## 核心设计思路
-1. 指标按链路分层：HTTP 基础层、鉴权层、MQ 可靠性层、Query/Stream 业务层。
-2. 指标命名稳定化，优先保证长期可对比，而不是一次性追求覆盖率。
-3. 埋点函数保持轻量，避免反向侵入业务逻辑与引入高耦合。
+## 实现逻辑
+1. 启动时注册全部指标。
+2. 在请求入口和关键节点上报耗时与计数。
+3. 通过标签区分成功状态、模型类型与是否启用检索增强。
 
-## 边界与依赖
-模块只产出 metric，不负责告警策略、通知路由和 dashboard 视觉层。
+## 关键接口
+```go
+func RegisterAll()
+func ObserveHTTPRequest(method string, path string, status string, d time.Duration)
+func IncQueryRequest(success bool, modelType string, useRAG bool)
+func ObserveStreamFirstToken(d time.Duration)
+```
 
-## 演进策略
-后续可补充租户/模型维度分桶，并与 tracing 进行关联分析。
+## 协作关系
+- 被接口中间件与业务服务共同调用。
+- 与追踪模块一起构成观测体系。

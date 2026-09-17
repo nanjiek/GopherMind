@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"gophermind/internal/core/model"
 	"testing"
 	"time"
 
@@ -160,4 +161,11 @@ func TestConsumer_HandleDelivery_RetryPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, producer.retries)
 	require.Equal(t, mysqlrepo.InboxStatusFailed, inboxRepo.seen["r-retry"])
+}
+
+func (f *fakeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {
+	return nil, false, nil
+}
+func (f *fakeCache) SetWindow(_ context.Context, _, _ string, _ []model.Message, _ time.Duration) error {
+	return nil
 }

@@ -45,7 +45,7 @@ func (c *PythonClient) Embed(ctx context.Context, text string) ([]float64, error
 }
 
 // Retrieve 调用 Qdrant 检索。
-func (c *PythonClient) Retrieve(ctx context.Context, userID string, query string, topK int) ([]model.RAGDocument, error) {
+func (c *PythonClient) Retrieve(ctx context.Context, userID string, _ string, query string, topK int) ([]model.RAGDocument, error) {
 	req := ragtypes.RetrieveRequest{
 		UserID: userID,
 		Query:  query,

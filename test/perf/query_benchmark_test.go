@@ -39,6 +39,15 @@ func (f *benchRepo) AppendAssistantMessage(_ context.Context, _ string, _ string
 func (f *benchRepo) GetSession(_ context.Context, _ string, _ string) (model.Session, error) {
 	return f.session, nil
 }
+func (f *benchRepo) ListSessions(_ context.Context, userID string, limit int) ([]model.Session, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if f.session.UserID != userID {
+		return []model.Session{}, nil
+	}
+	return []model.Session{f.session}, nil
+}
 func (f *benchRepo) ListMessages(_ context.Context, _ string, _ string) ([]model.Message, error) {
 	return f.msgs, nil
 }
@@ -73,7 +82,7 @@ func (s *benchRouter) GenerateStreamWithFallback(_ context.Context, _ string, _ 
 type benchRAG struct{}
 
 func (s *benchRAG) Embed(_ context.Context, _ string) ([]float64, error) { return nil, nil }
-func (s *benchRAG) Retrieve(_ context.Context, _ string, _ string, _ int) ([]model.RAGDocument, error) {
+func (s *benchRAG) Retrieve(_ context.Context, _ string, _ string, _ string, _ int) ([]model.RAGDocument, error) {
 	return nil, nil
 }
 func (s *benchRAG) Rerank(_ context.Context, _ string, docs []model.RAGDocument, _ int) ([]model.RAGDocument, error) {
@@ -104,8 +113,8 @@ func BenchmarkQueryEndpoint(b *testing.B) {
 	repo := &benchRepo{}
 	cache := &benchCache{}
 	sessionSvc := service.NewSessionService(repo, cache, logger)
-	querySvc := service.NewQueryService(repo, sessionSvc, &benchRouter{}, &benchRAG{}, &benchQueue{}, cache, logger)
-	streamSvc := service.NewStreamService(repo, sessionSvc, &benchRouter{}, &benchRAG{}, cache, logger)
+	querySvc := service.NewQueryService(repo, sessionSvc, &benchRouter{}, &benchRAG{}, &benchQueue{}, cache, nil, nil, nil, logger)
+	streamSvc := service.NewStreamService(repo, sessionSvc, &benchRouter{}, &benchRAG{}, cache, nil, nil, nil, logger)
 	router := httptransport.NewRouter(cfg, logger, nil, nil, querySvc, sessionSvc, streamSvc)
 
 	payload, _ := json.Marshal(httpcontracts.QueryRequest{
@@ -124,4 +133,11 @@ func BenchmarkQueryEndpoint(b *testing.B) {
 			b.Fatalf("unexpected status code: %d", w.Code)
 		}
 	}
+}
+
+func (f *benchCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {
+	return nil, false, nil
+}
+func (f *benchCache) SetWindow(_ context.Context, _, _ string, _ []model.Message, _ time.Duration) error {
+	return nil
 }

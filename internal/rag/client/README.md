@@ -1,15 +1,22 @@
-﻿# internal/rag/client 设计说明
+# 包说明
 
-## 设计定位
-该模块是 Go 侧 RAG 网关，负责调用 Python 服务并做故障降级。
+## 包作用
+- 提供检索增强远程调用客户端，屏蔽下游服务细节。
+- 向业务层暴露统一检索增强能力接口。
 
-## 核心设计思路
-1. 把 embed/retrieve/rerank/kg 四类调用聚合为统一客户端。
-2. 远程调用失败时提供保守降级，优先保证在线问答链路可继续。
-3. 客户端只暴露语义接口，不泄漏 HTTP 细节到 service 层。
+## 实现逻辑
+1. 初始化时读取地址和超时等配置。
+2. 通过统一请求函数处理编解码与错误转换。
+3. 分别实现向量化、召回、重排和知识图谱占位调用。
 
-## 边界与依赖
-边界在于跨进程调用适配，不承担业务流程编排。
+## 关键接口
+```go
+type PythonClient struct
+func (c *PythonClient) Embed(ctx context.Context, text string) ([]float64, error)
+func (c *PythonClient) Retrieve(ctx context.Context, userID string, query string, topK int) ([]model.RAGDocument, error)
+func (c *PythonClient) Rerank(ctx context.Context, query string, docs []model.RAGDocument, topN int) ([]model.RAGDocument, error)
+```
 
-## 演进策略
-后续可增加熔断、批处理与连接池优化。
+## 协作关系
+- 被业务服务层调用构造增强上下文。
+- 依赖检索契约模块定义输入输出结构。

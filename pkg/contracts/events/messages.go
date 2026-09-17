@@ -43,3 +43,45 @@ type ResultMessage struct {
 	TraceID        string    `json:"trace_id"`
 	CreatedAt      time.Time `json:"created_at"`
 }
+
+// DocumentIngestMessage describes a document indexing job.
+type DocumentIngestMessage struct {
+	EventType string    `json:"event_type"`
+	Version   string    `json:"version"`
+	JobID     string    `json:"job_id"`
+	UserID    string    `json:"user_id"`
+	DocumentID string   `json:"document_id"`
+	FileKey   string    `json:"file_key"`
+	Filename  string    `json:"filename"`
+	TraceID   string    `json:"trace_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// JudgeMessage describes an offline evaluation task.
+type JudgeMessage struct {
+	EventType  string    `json:"event_type"`
+	Version    string    `json:"version"`
+	JobID      string    `json:"job_id"`
+	RequestID  string    `json:"request_id"`
+	TraceID    string    `json:"trace_id"`
+	UserID     string    `json:"user_id"`
+	SessionID  string    `json:"session_id"`
+	Question   string    `json:"question"`
+	Answer     string    `json:"answer"`
+	ModelType  string    `json:"model_type"`
+	Citations  []string  `json:"citations,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// MCPToolMessage describes an asynchronous MCP remote tool job.
+type MCPToolMessage struct {
+	EventType   string         `json:"event_type"`
+	Version     string         `json:"version"`
+	JobID       string         `json:"job_id"`
+	UserID      string         `json:"user_id"`
+	ToolName    string         `json:"tool_name"`
+	ResumeToken string         `json:"resume_token"`
+	Payload     map[string]any `json:"payload"`
+	TraceID     string         `json:"trace_id"`
+	CreatedAt   time.Time      `json:"created_at"`
+}

@@ -44,6 +44,7 @@ type Usage struct {
 type QueryInput struct {
 	UserID    string
 	SessionID string
+	DocumentID string
 	Question  string
 	ModelType string
 	UseRAG    bool
@@ -67,6 +68,17 @@ type RAGDocument struct {
 	Metadata map[string]string
 }
 
+// VectorDocumentChunk stores one chunk with its dense and sparse representations.
+type VectorDocumentChunk struct {
+	DocID         string
+	ChunkID       string
+	Content       string
+	DenseVector   []float64
+	SparseIndices []uint32
+	SparseValues  []float32
+	Metadata      map[string]string
+}
+
 // AuthUser 是认证域用户模型。
 type AuthUser struct {
 	ID           uint64
@@ -82,4 +94,58 @@ type RefreshTokenRecord struct {
 	TokenHash string
 	DeviceID  string
 	ExpiresAt time.Time
+}
+
+// Memory represents a user-managed long-term memory item.
+type Memory struct {
+	ID        string
+	UserID    string
+	Content   string
+	Tags      []string
+	Enabled   bool
+	Source    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Document represents an uploaded RAG document and indexing status.
+type Document struct {
+	ID           string
+	UserID       string
+	JobID        string
+	FileKey      string
+	Filename     string
+	ContentType  string
+	SizeBytes    int64
+	Status       string
+	ErrorMessage string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// EvalRun stores an offline LLM-as-a-Judge result snapshot.
+type EvalRun struct {
+	ID                 string
+	RequestID          string
+	TraceID            string
+	AnswerCorrectness  float64
+	AnswerCompleteness float64
+	Groundedness       float64
+	CitationSupport    float64
+	HallucinationRisk  float64
+	MedicalSafetyFlag  bool
+	CreatedAt          time.Time
+}
+
+// AsyncToolJob describes an MCP remote tool execution job.
+type AsyncToolJob struct {
+	ID          string
+	UserID      string
+	ToolName    string
+	Status      string
+	ResumeToken string
+	Output      string
+	ErrorMessage string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }

@@ -1,15 +1,21 @@
-﻿# internal/model/factory 设计说明
+# 包说明
 
-## 设计定位
-该模块负责多模型选择与回退，是模型治理策略的实现点。
+## 包作用
+- 统一管理模型提供方选择与回退逻辑。
+- 向业务层提供单一模型调用入口。
 
-## 核心设计思路
-1. 将 provider 注册与路由决策集中，避免业务层散落模型判断逻辑。
-2. 默认优先高质量 provider，失败时按策略回退到本地 provider。
-3. 对外暴露统一生成接口，屏蔽不同 provider 的调用差异。
+## 实现逻辑
+1. 启动时注入多个模型提供方并建立映射。
+2. 按模型类型返回对应实现。
+3. 主实现失败时执行回退策略，降低不可用风险。
 
-## 边界与依赖
-边界在于只处理选谁生成，不处理 prompt 构建和会话存储。
+## 关键接口
+```go
+type ModelFactory struct
+func (f *ModelFactory) Get(modelType string) (service.ModelProvider, error)
+func (f *ModelFactory) GenerateWithFallback(ctx context.Context, modelType string, prompt string) (string, model.Usage, error)
+```
 
-## 演进策略
-后续可接入动态路由并支持 A/B 路由。
+## 协作关系
+- 依赖模型提供方模块。
+- 被业务服务层调用完成路由。

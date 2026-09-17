@@ -15,3 +15,16 @@ type SessionData struct {
 	Title     string                   `json:"title"`
 	Messages  []SessionMessageResponse `json:"messages"`
 }
+
+// SessionItemResponse describes an item in session list.
+type SessionItemResponse struct {
+	SessionID     string    `json:"session_id"`
+	Title         string    `json:"title"`
+	LastMessageAt time.Time `json:"last_message_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// SessionListData describes GET /sessions payload.
+type SessionListData struct {
+	Items []SessionItemResponse `json:"items"`
+}

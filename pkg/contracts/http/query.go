@@ -3,6 +3,7 @@ package httpcontracts
 // QueryRequest 对应 POST /query。
 type QueryRequest struct {
 	SessionID string `json:"session_id,omitempty"`
+	DocumentID string `json:"document_id,omitempty"`
 	Question  string `json:"question" binding:"required"`
 	ModelType string `json:"model_type,omitempty"`
 	UseRAG    bool   `json:"use_rag"`

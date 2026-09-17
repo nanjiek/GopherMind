@@ -75,17 +75,20 @@ func main() {
 	defer producer.Close()
 
 	openaiProvider := providers.NewOpenAIProvider(cfg.Model, logg)
+	kimiProvider := providers.NewKimiProvider(cfg.Model, logg)
+	qwenProvider := providers.NewQwenProvider(cfg.Model, logg)
 	ollamaProvider := providers.NewOllamaProvider(cfg.Model, logg)
 	bgeProvider := providers.NewBGEProvider(cfg.Model, logg)
-	modelRouter := factory.NewModelFactory(openaiProvider, ollamaProvider, bgeProvider, logg)
+	modelRouter := factory.NewModelFactory(openaiProvider, kimiProvider, qwenProvider, ollamaProvider, bgeProvider, logg)
 
 	rag := ragclient.NewPythonClient(cfg.RAG, logg)
 	tokenManager := token.NewManager(cfg.Auth)
 	authService := service.NewAuthService(authRepo, tokenManager)
 	attachmentService := service.NewAttachmentService(cfg.Upload, logg)
 	sessionService := service.NewSessionService(sessionRepo, cache, logg)
-	queryService := service.NewQueryService(sessionRepo, sessionService, modelRouter, rag, producer, cache, logg)
-	streamService := service.NewStreamService(sessionRepo, sessionService, modelRouter, rag, cache, logg)
+	// Optional memory, tracing and judge services are not enabled in this baseline.
+	queryService := service.NewQueryService(sessionRepo, sessionService, modelRouter, rag, producer, cache, nil, nil, nil, logg)
+	streamService := service.NewStreamService(sessionRepo, sessionService, modelRouter, rag, cache, nil, nil, nil, logg)
 
 	router := httptransport.NewRouter(
 		cfg,

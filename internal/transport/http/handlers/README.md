@@ -1,15 +1,24 @@
-﻿# internal/transport/http/handlers 设计说明
+# 包说明
 
-## 设计定位
-该模块负责把外部请求映射为用例输入，再把用例结果映射回响应协议。
+## 包作用
+- 负责请求参数解析、服务调用和响应封装。
+- 统一处理普通响应与流式响应输出。
 
-## 核心设计思路
-1. handler 只做参数绑定、身份上下文提取和错误映射。
-2. SSE 与 WebSocket 的差异在此层收敛，上层仍使用同一流式服务接口。
-3. 附件上传在该层完成协议适配（multipart 与业务输入转换），并保持无状态便于测试和扩容。
+## 实现逻辑
+1. 查询处理器完成问答请求校验与调用。
+2. 会话处理器负责读取会话详情和消息列表。
+3. 流式处理器根据协商选择不同流式通道。
+4. 鉴权和附件处理器负责账号与文件相关流程。
 
-## 边界与依赖
-边界在于入参出参转换，不包含核心业务逻辑。
+## 关键接口
+```go
+type QueryHandler struct
+func (h *QueryHandler) Handle(c *gin.Context)
+type StreamHandler struct
+func (h *StreamHandler) Handle(c *gin.Context)
+type AuthHandler struct
+```
 
-## 演进策略
-后续可增加更细化的错误码映射和统一审计埋点。
+## 协作关系
+- 依赖业务服务层提供核心能力。
+- 依赖接口契约模块定义响应结构。

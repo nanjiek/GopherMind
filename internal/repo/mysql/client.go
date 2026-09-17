@@ -29,6 +29,10 @@ func NewDB(cfg config.MySQLConfig) (*gorm.DB, error) {
 		&UserModel{},
 		&RefreshTokenModel{},
 		&ConsumerInboxModel{},
+		&DocumentModel{},
+		&EvalRunModel{},
+		&MCPJobModel{},
+		&MemoryCatalogModel{},
 	); err != nil {
 		return nil, err
 	}

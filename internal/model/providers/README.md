@@ -1,15 +1,23 @@
-﻿# internal/model/providers 设计说明
+# 包说明
 
-## 设计定位
-该模块封装具体模型供应商适配器，目标是把外部 API 差异收敛到统一接口。
+## 包作用
+- 封装各模型提供方协议细节，输出统一生成接口。
+- 提供重试与稳定性辅助能力。
 
-## 核心设计思路
-1. 每个 provider 只负责自身协议转换与错误语义归一，不承担业务编排。
-2. 为远程调用统一提供超时、重试、熔断钩子，提高失败可控性。
-3. 流式与非流式保持同一抽象，便于上层无差别调用。
+## 实现逻辑
+1. 分别实现多个模型提供方的普通与流式生成。
+2. 通过重试策略应对瞬时失败。
+3. 通过状态维护处理调用异常和恢复。
+4. 提供文本分片能力支撑流式输出。
 
-## 边界与依赖
-边界在于外部模型适配层；依赖 HTTP 客户端与配置，不依赖 Gin 或数据库。
+## 关键接口
+```go
+type OpenAIProvider struct
+type OllamaProvider struct
+type BGEProvider struct
+func withRetry(ctx context.Context, attempts int, baseDelay time.Duration, fn func(context.Context) error) error
+```
 
-## 演进策略
-后续可补全真实 streaming 协议、token 计量采集与 provider 健康探针。
+## 协作关系
+- 被模型工厂聚合并对上游暴露。
+- 依赖配置模块获取模型参数。

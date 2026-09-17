@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -52,5 +53,40 @@ func (h *SessionHandler) GetSession(c *gin.Context) {
 		SessionID: sess.ID,
 		Title:     sess.Title,
 		Messages:  items,
+	}))
+}
+
+// ListSessions returns recent sessions for current user.
+func (h *SessionHandler) ListSessions(c *gin.Context) {
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, httpcontracts.Err(40103, "missing user id"))
+		return
+	}
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			limit = v
+		}
+	}
+	sessions, err := h.svc.ListSessions(c.Request.Context(), userID, limit)
+	if err != nil {
+		if h.logger != nil {
+			h.logger.Error("list sessions failed", zap.Error(err))
+		}
+		c.JSON(http.StatusInternalServerError, httpcontracts.Err(50011, "list sessions failed"))
+		return
+	}
+	items := make([]httpcontracts.SessionItemResponse, 0, len(sessions))
+	for _, sess := range sessions {
+		items = append(items, httpcontracts.SessionItemResponse{
+			SessionID:     sess.ID,
+			Title:         sess.Title,
+			LastMessageAt: sess.LastMessageAt,
+			UpdatedAt:     sess.UpdatedAt,
+		})
+	}
+	c.JSON(http.StatusOK, httpcontracts.OK(httpcontracts.SessionListData{
+		Items: items,
 	}))
 }
