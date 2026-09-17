@@ -83,7 +83,7 @@ func (h *handlerFakeRouter) GenerateStreamWithFallback(_ context.Context, _ stri
 type handlerFakeRAG struct{}
 
 func (h *handlerFakeRAG) Embed(_ context.Context, _ string) ([]float64, error) { return nil, nil }
-func (h *handlerFakeRAG) Retrieve(_ context.Context, _ string, _ string, _ int) ([]model.RAGDocument, error) {
+func (h *handlerFakeRAG) Retrieve(_ context.Context, _ string, _ string, _ string, _ int) ([]model.RAGDocument, error) {
 	return nil, nil
 }
 func (h *handlerFakeRAG) Rerank(_ context.Context, _ string, docs []model.RAGDocument, _ int) ([]model.RAGDocument, error) {
@@ -110,8 +110,8 @@ func TestQueryHandler_Handle(t *testing.T) {
 	repo := &handlerFakeRepo{}
 	cache := &handlerFakeCache{}
 	sessionSvc := service.NewSessionService(repo, cache, nil)
-	querySvc := service.NewQueryService(repo, sessionSvc, &handlerFakeRouter{}, &handlerFakeRAG{}, &handlerFakeQueue{}, cache, nil)
-	handler := NewQueryHandler(querySvc, nil)
+	querySvc := service.NewQueryService(repo, sessionSvc, &handlerFakeRouter{}, &handlerFakeRAG{}, &handlerFakeQueue{}, cache, nil, nil, nil, nil)
+	handler := NewQueryHandler(querySvc, nil, nil)
 
 	r := gin.New()
 	r.POST("/query", func(c *gin.Context) {
@@ -130,4 +130,11 @@ func TestQueryHandler_Handle(t *testing.T) {
 	var resp httpcontracts.APIResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Equal(t, 0, resp.Code)
+}
+
+func (f *handlerFakeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {
+	return nil, false, nil
+}
+func (f *handlerFakeCache) SetWindow(_ context.Context, _, _ string, _ []model.Message, _ time.Duration) error {
+	return nil
 }
