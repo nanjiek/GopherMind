@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -16,25 +17,40 @@ import (
 	"gophermind/internal/core/model"
 )
 
-// OpenAIProvider 对接 OpenAI 兼容接口。
+// OpenAIProvider implements OpenAI-compatible chat completion calls.
 type OpenAIProvider struct {
-	baseURL    string
-	apiKey     string
-	model      string
-	httpClient *http.Client
-	logger     *zap.Logger
+	providerName string
+	baseURL      string
+	apiKey       string
+	model        string
+	httpClient   *http.Client
+	logger       *zap.Logger
 
 	mu          sync.Mutex
 	failures    int
 	lastFailure time.Time
 }
 
-// NewOpenAIProvider 构建 OpenAIProvider。
 func NewOpenAIProvider(cfg config.ModelConfig, logger *zap.Logger) *OpenAIProvider {
+	return newOpenAICompatibleProvider("openai", cfg.OpenAIBaseURL, cfg.OpenAIAPIKey, cfg.OpenAIModel, logger)
+}
+
+// NewKimiProvider reuses the same OpenAI-compatible protocol with Kimi endpoint/model.
+func NewKimiProvider(cfg config.ModelConfig, logger *zap.Logger) *OpenAIProvider {
+	return newOpenAICompatibleProvider("kimi", cfg.KimiBaseURL, cfg.KimiAPIKey, cfg.KimiModel, logger)
+}
+
+// NewQwenProvider reuses the same OpenAI-compatible protocol with DashScope endpoint/model.
+func NewQwenProvider(cfg config.ModelConfig, logger *zap.Logger) *OpenAIProvider {
+	return newOpenAICompatibleProvider("qwen", cfg.QwenBaseURL, cfg.QwenAPIKey, cfg.QwenModel, logger)
+}
+
+func newOpenAICompatibleProvider(name, baseURL, apiKey, modelName string, logger *zap.Logger) *OpenAIProvider {
 	return &OpenAIProvider{
-		baseURL: strings.TrimRight(cfg.OpenAIBaseURL, "/"),
-		apiKey:  cfg.OpenAIAPIKey,
-		model:   cfg.OpenAIModel,
+		providerName: name,
+		baseURL:      strings.TrimRight(baseURL, "/"),
+		apiKey:       apiKey,
+		model:        modelName,
 		httpClient: &http.Client{
 			Timeout: 45 * time.Second,
 		},
@@ -42,17 +58,15 @@ func NewOpenAIProvider(cfg config.ModelConfig, logger *zap.Logger) *OpenAIProvid
 	}
 }
 
-func (p *OpenAIProvider) Name() string { return "openai" }
+func (p *OpenAIProvider) Name() string { return p.providerName }
 
-// Generate 调用模型生成完整文本。
 func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, model.Usage, error) {
 	if p.isCircuitOpen() {
 		return "", model.Usage{}, errCircuitOpen
 	}
 
-	// 未配置 API Key 时，返回可测试的本地降级结果。
 	if p.apiKey == "" {
-		answer := "[openai-mock] " + prompt
+		answer := fmt.Sprintf("[%s-mock] %s", p.Name(), prompt)
 		return answer, model.Usage{Provider: p.Name(), InputTokens: len(prompt) / 4, OutputTokens: len(answer) / 4}, nil
 	}
 
@@ -63,7 +77,14 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, m
 			"messages": []map[string]string{
 				{"role": "user", "content": prompt},
 			},
-			"temperature": 0.2,
+		}
+		// Kimi k2.5 does not allow overriding temperature.
+		if p.shouldSendTemperature() {
+			reqBody["temperature"] = 0.2
+		}
+		// Keep latency predictable for kimi-k2.5 in sync query path.
+		if p.shouldDisableKimiThinking() {
+			reqBody["thinking"] = map[string]string{"type": "disabled"}
 		}
 		buf := bytes.NewBuffer(nil)
 		if err := json.NewEncoder(buf).Encode(reqBody); err != nil {
@@ -86,7 +107,12 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, m
 
 		if resp.StatusCode >= 300 {
 			p.markFailure()
-			return fmt.Errorf("openai status %d", resp.StatusCode)
+			errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			msg := strings.TrimSpace(string(errBody))
+			if msg == "" {
+				msg = http.StatusText(resp.StatusCode)
+			}
+			return fmt.Errorf("%s status %d: %s", p.Name(), resp.StatusCode, msg)
 		}
 
 		var parsed struct {
@@ -102,7 +128,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, m
 		}
 		if len(parsed.Choices) == 0 {
 			p.markFailure()
-			return fmt.Errorf("openai empty choices")
+			return fmt.Errorf("%s empty choices", p.Name())
 		}
 		answer = parsed.Choices[0].Message.Content
 		return nil
@@ -114,7 +140,6 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, m
 	return answer, model.Usage{Provider: p.Name(), InputTokens: len(prompt) / 4, OutputTokens: len(answer) / 4}, nil
 }
 
-// GenerateStream 用假流式输出保持接口一致性。
 func (p *OpenAIProvider) GenerateStream(ctx context.Context, prompt string, onToken func(string) error) (string, model.Usage, error) {
 	answer, usage, err := p.Generate(ctx, prompt)
 	if err != nil {
@@ -145,4 +170,12 @@ func (p *OpenAIProvider) resetFailure() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.failures = 0
+}
+
+func (p *OpenAIProvider) shouldSendTemperature() bool {
+	return !(p.Name() == "kimi" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(p.model)), "kimi-k2.5"))
+}
+
+func (p *OpenAIProvider) shouldDisableKimiThinking() bool {
+	return p.Name() == "kimi" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(p.model)), "kimi-k2.5")
 }

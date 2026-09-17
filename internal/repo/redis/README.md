@@ -1,15 +1,23 @@
-﻿# internal/repo/redis 设计说明
+# 包说明
 
-## 设计定位
-该模块实现 Redis Cluster 缓存策略，并提供服务降级兜底。
+## 包作用
+- 提供缓存集群访问与会话缓存实现。
+- 在缓存异常场景提供内存降级以保护主流程。
 
-## 核心设计思路
-1. 缓存键设计围绕会话摘要、流式分片、幂等标记三类热点状态。
-2. 优先命中 Redis，异常时自动退化到内存，确保功能可用性。
-3. TTL 设计贴合业务时效，避免缓存污染和状态泄漏。
+## 实现逻辑
+1. 初始化集群客户端并进行连通性检查。
+2. 管理摘要缓存、流式分片缓存和幂等键。
+3. 远端失败时标记降级并写入本地回退缓存。
+4. 支持流式分片追加与回读。
 
-## 边界与依赖
-边界在于热点状态管理，不承担持久化一致性主责任。
+## 关键接口
+```go
+func NewClusterClient(cfg config.RedisConfig) *redis.ClusterClient
+type SessionCache struct
+func (c *SessionCache) GetSummary(ctx context.Context, userID string, sessionID string) (string, bool, error)
+func (c *SessionCache) AppendStreamChunk(ctx context.Context, requestID string, chunk string, ttl time.Duration) error
+```
 
-## 演进策略
-后续可增加本地 fallback 清理策略和更细粒度的退化开关。
+## 协作关系
+- 被业务服务用于摘要和流式状态缓存。
+- 被消息消费模块用于幂等标记。

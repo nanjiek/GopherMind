@@ -62,3 +62,57 @@ type ConsumerInboxModel struct {
 	CreatedAt  time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt  time.Time  `gorm:"autoUpdateTime"`
 }
+
+// DocumentModel stores document upload and indexing lifecycle.
+type DocumentModel struct {
+	ID           string    `gorm:"type:char(36);primaryKey"`
+	UserID       string    `gorm:"size:64;index:idx_documents_user_status,priority:1;not null"`
+	JobID        string    `gorm:"size:36;index"`
+	FileKey      string    `gorm:"size:512;not null"`
+	Filename     string    `gorm:"size:255;not null"`
+	ContentType  string    `gorm:"size:128"`
+	SizeBytes    int64     `gorm:"not null"`
+	Status       string    `gorm:"size:32;index:idx_documents_user_status,priority:2;not null"`
+	ErrorMessage string    `gorm:"size:1024"`
+	CreatedAt    time.Time `gorm:"autoCreateTime"`
+	UpdatedAt    time.Time `gorm:"autoUpdateTime"`
+}
+
+// EvalRunModel stores offline judge results for reporting.
+type EvalRunModel struct {
+	ID                 string    `gorm:"type:char(36);primaryKey"`
+	RequestID          string    `gorm:"size:36;index;not null"`
+	TraceID            string    `gorm:"size:128;index"`
+	AnswerCorrectness  float64   `gorm:"not null"`
+	AnswerCompleteness float64   `gorm:"not null"`
+	Groundedness       float64   `gorm:"not null"`
+	CitationSupport    float64   `gorm:"not null"`
+	HallucinationRisk  float64   `gorm:"not null"`
+	MedicalSafetyFlag  bool      `gorm:"not null"`
+	CreatedAt          time.Time `gorm:"autoCreateTime"`
+}
+
+// MCPJobModel stores asynchronous remote tool job state.
+type MCPJobModel struct {
+	ID           string    `gorm:"type:char(36);primaryKey"`
+	UserID       string    `gorm:"size:64;index;not null"`
+	ToolName     string    `gorm:"size:128;not null"`
+	Status       string    `gorm:"size:32;index;not null"`
+	ResumeToken  string    `gorm:"size:64;uniqueIndex;not null"`
+	Output       string    `gorm:"type:mediumtext"`
+	ErrorMessage string    `gorm:"size:1024"`
+	CreatedAt    time.Time `gorm:"autoCreateTime"`
+	UpdatedAt    time.Time `gorm:"autoUpdateTime"`
+}
+
+// MemoryCatalogModel stores listable memory metadata while vectors stay in Pinecone.
+type MemoryCatalogModel struct {
+	ID        string    `gorm:"type:char(36);primaryKey"`
+	UserID    string    `gorm:"size:64;index;not null"`
+	Content   string    `gorm:"type:text;not null"`
+	Tags      string    `gorm:"size:1024"`
+	Enabled   bool      `gorm:"not null;default:true"`
+	Source    string    `gorm:"size:32;not null"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+}

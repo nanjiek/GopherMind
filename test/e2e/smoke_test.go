@@ -40,6 +40,15 @@ func (f *smokeRepo) AppendAssistantMessage(_ context.Context, _ string, _ string
 func (f *smokeRepo) GetSession(_ context.Context, _ string, _ string) (model.Session, error) {
 	return f.session, nil
 }
+func (f *smokeRepo) ListSessions(_ context.Context, userID string, limit int) ([]model.Session, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if f.session.UserID != userID {
+		return []model.Session{}, nil
+	}
+	return []model.Session{f.session}, nil
+}
 func (f *smokeRepo) ListMessages(_ context.Context, _ string, _ string) ([]model.Message, error) {
 	return f.msgs, nil
 }

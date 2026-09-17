@@ -11,13 +11,18 @@ import (
 type Config struct {
 	ServiceName string
 	HTTP        HTTPConfig
+	MCP         MCPConfig
 	MySQL       MySQLConfig
 	Redis       RedisConfig
 	RabbitMQ    RabbitMQConfig
+	RocketMQ    RocketMQConfig
 	Auth        AuthConfig
 	Upload      UploadConfig
 	Model       ModelConfig
 	RAG         RAGConfig
+	Pinecone    PineconeConfig
+	Langfuse    LangfuseConfig
+	Eval        EvalConfig
 }
 
 type HTTPConfig struct {
@@ -25,6 +30,12 @@ type HTTPConfig struct {
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
 	ShutdownTimeout time.Duration
+}
+
+type MCPConfig struct {
+	Enabled       bool
+	Transport     string
+	DefaultUserID string
 }
 
 type MySQLConfig struct {
@@ -56,6 +67,16 @@ type RabbitMQConfig struct {
 	RetryDelay3 time.Duration
 }
 
+type RocketMQConfig struct {
+	Enabled         bool
+	NameServers     []string
+	ProducerGroup   string
+	ConsumerGroup   string
+	TopicDocIngest  string
+	TopicMCPRemote  string
+	TopicEvalJudge  string
+}
+
 type AuthConfig struct {
 	AccessSecret    string
 	RefreshSecret   string
@@ -74,6 +95,12 @@ type ModelConfig struct {
 	OpenAIBaseURL string
 	OpenAIAPIKey  string
 	OpenAIModel   string
+	KimiBaseURL   string
+	KimiAPIKey    string
+	KimiModel     string
+	QwenBaseURL   string
+	QwenAPIKey    string
+	QwenModel     string
 	OllamaBaseURL string
 	OllamaModel   string
 	BGEBaseURL    string
@@ -81,7 +108,37 @@ type ModelConfig struct {
 }
 
 type RAGConfig struct {
-	PythonServiceURL string
+	PythonServiceURL         string
+	ChunkSize                int
+	ChunkOverlap             int
+	TopK                     int
+	RerankTopN               int
+	DocumentWaitReadyTimeout time.Duration
+}
+
+type PineconeConfig struct {
+	APIKey           string
+	DenseHost        string
+	SparseHost       string
+	MemoryHost       string
+	DocumentTopK     int
+	MemoryTopK       int
+	Namespace        string
+	MemoryNamespace  string
+}
+
+type LangfuseConfig struct {
+	Enabled     bool
+	BaseURL     string
+	PublicKey   string
+	SecretKey   string
+	Environment string
+}
+
+type EvalConfig struct {
+	Enabled        bool
+	SampleRate     float64
+	JudgeModelType string
 }
 
 // Load 从环境变量读取配置并提供保守默认值。
@@ -93,6 +150,11 @@ func Load() Config {
 			ReadTimeout:     getDuration("HTTP_READ_TIMEOUT", 15*time.Second),
 			WriteTimeout:    getDuration("HTTP_WRITE_TIMEOUT", 60*time.Second),
 			ShutdownTimeout: getDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
+		},
+		MCP: MCPConfig{
+			Enabled:       getBool("MCP_ENABLED", false),
+			Transport:     getEnv("MCP_TRANSPORT", "stdio"),
+			DefaultUserID: getEnv("MCP_DEFAULT_USER_ID", "mcp-user"),
 		},
 		MySQL: MySQLConfig{
 			DSN:             getEnv("MYSQL_DSN", "root:password@tcp(mysql:3306)/gophermind?charset=utf8mb4&parseTime=True&loc=Local"),
@@ -120,6 +182,15 @@ func Load() Config {
 			RetryDelay2: getDuration("RABBITMQ_RETRY_DELAY_2", 30*time.Second),
 			RetryDelay3: getDuration("RABBITMQ_RETRY_DELAY_3", 120*time.Second),
 		},
+		RocketMQ: RocketMQConfig{
+			Enabled:        getBool("ROCKETMQ_ENABLED", false),
+			NameServers:    getStringSlice("ROCKETMQ_NAME_SERVERS", []string{"127.0.0.1:9876"}),
+			ProducerGroup:  getEnv("ROCKETMQ_PRODUCER_GROUP", "gophermind-producer"),
+			ConsumerGroup:  getEnv("ROCKETMQ_CONSUMER_GROUP", "gophermind-consumer"),
+			TopicDocIngest: getEnv("ROCKETMQ_TOPIC_DOC_INGEST", "gm.doc.ingest"),
+			TopicMCPRemote: getEnv("ROCKETMQ_TOPIC_MCP_REMOTE", "gm.mcp.remote_tool"),
+			TopicEvalJudge: getEnv("ROCKETMQ_TOPIC_EVAL_JUDGE", "gm.eval.judge"),
+		},
 		Auth: AuthConfig{
 			AccessSecret:    getEnv("JWT_ACCESS_SECRET", getEnv("JWT_SECRET", "gophermind-dev-access-secret")),
 			RefreshSecret:   getEnv("JWT_REFRESH_SECRET", getEnv("JWT_SECRET", "gophermind-dev-refresh-secret")),
@@ -138,13 +209,46 @@ func Load() Config {
 			OpenAIBaseURL: getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 			OpenAIAPIKey:  getEnv("OPENAI_API_KEY", ""),
 			OpenAIModel:   getEnv("OPENAI_MODEL", "gpt-4.1-mini"),
+			KimiBaseURL:   getEnv("KIMI_BASE_URL", "https://api.moonshot.cn/v1"),
+			KimiAPIKey:    getEnv("KIMI_API_KEY", ""),
+			KimiModel:     getEnv("KIMI_MODEL", "moonshot-v1-8k"),
+			QwenBaseURL:   getEnv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+			QwenAPIKey:    getEnv("QWEN_API_KEY", ""),
+			QwenModel:     getEnv("QWEN_MODEL", "qwen-plus"),
 			OllamaBaseURL: getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
 			OllamaModel:   getEnv("OLLAMA_MODEL", "qwen2.5:7b"),
 			BGEBaseURL:    getEnv("BGE_BASE_URL", "http://localhost:8001"),
 			BGEModel:      getEnv("BGE_MODEL", "bge-reranker-v2-m3"),
 		},
 		RAG: RAGConfig{
-			PythonServiceURL: getEnv("RAG_PYTHON_URL", "http://localhost:8000"),
+			PythonServiceURL:         getEnv("RAG_PYTHON_URL", "http://localhost:8000"),
+			ChunkSize:                getInt("RAG_CHUNK_SIZE", 600),
+			ChunkOverlap:             getInt("RAG_CHUNK_OVERLAP", 120),
+			TopK:                     getInt("RAG_TOP_K", 20),
+			RerankTopN:               getInt("RAG_RERANK_TOP_N", 5),
+			DocumentWaitReadyTimeout: getDuration("RAG_DOCUMENT_WAIT_READY_TIMEOUT", 20*time.Second),
+		},
+		Pinecone: PineconeConfig{
+			APIKey:          getEnv("PINECONE_API_KEY", ""),
+			DenseHost:       getEnv("PINECONE_DENSE_HOST", ""),
+			SparseHost:      getEnv("PINECONE_SPARSE_HOST", ""),
+			MemoryHost:      getEnv("PINECONE_MEMORY_HOST", ""),
+			DocumentTopK:    getInt("PINECONE_DOCUMENT_TOP_K", 20),
+			MemoryTopK:      getInt("PINECONE_MEMORY_TOP_K", 5),
+			Namespace:       getEnv("PINECONE_NAMESPACE", "gophermind-docs"),
+			MemoryNamespace: getEnv("PINECONE_MEMORY_NAMESPACE", "gophermind-memories"),
+		},
+		Langfuse: LangfuseConfig{
+			Enabled:     getBool("LANGFUSE_ENABLED", false),
+			BaseURL:     getEnv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"),
+			PublicKey:   getEnv("LANGFUSE_PUBLIC_KEY", ""),
+			SecretKey:   getEnv("LANGFUSE_SECRET_KEY", ""),
+			Environment: getEnv("LANGFUSE_ENVIRONMENT", "development"),
+		},
+		Eval: EvalConfig{
+			Enabled:        getBool("EVAL_ENABLED", false),
+			SampleRate:     getFloat("EVAL_SAMPLE_RATE", 0.2),
+			JudgeModelType: getEnv("EVAL_JUDGE_MODEL_TYPE", "qwen"),
 		},
 	}
 }
@@ -218,6 +322,18 @@ func getBool(key string, fallback bool) bool {
 		return fallback
 	}
 	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+func getFloat(key string, fallback float64) float64 {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return fallback
 	}

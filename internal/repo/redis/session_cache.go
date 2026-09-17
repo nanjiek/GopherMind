@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"gophermind/internal/config"
+	"gophermind/internal/core/model"
 )
 
 type fallbackItem struct {
@@ -53,6 +54,10 @@ func (c *SessionCache) streamKey(requestID string) string {
 	return fmt.Sprintf("chat:stream:%s", requestID)
 }
 
+func (c *SessionCache) windowKey(userID string, sessionID string) string {
+	return fmt.Sprintf("sess:%s:%s:window", userID, sessionID)
+}
+
 func (c *SessionCache) idempotencyKey(consumer string, messageID string) string {
 	return fmt.Sprintf("idempotency:%s:%s", consumer, messageID)
 }
@@ -81,6 +86,49 @@ func (c *SessionCache) SetSummary(ctx context.Context, userID string, sessionID 
 		return nil
 	}
 	if err := c.client.Set(ctx, key, summary, ttl).Err(); err != nil {
+		c.MarkDegraded(err)
+		return err
+	}
+	return nil
+}
+
+// GetWindow returns the cached recent message window.
+func (c *SessionCache) GetWindow(ctx context.Context, userID string, sessionID string) ([]model.Message, bool, error) {
+	key := c.windowKey(userID, sessionID)
+	if !c.degraded.Load() {
+		items, err := c.client.LRange(ctx, key, 0, -1).Result()
+		if err == nil {
+			out := make([]model.Message, 0, len(items))
+			for _, raw := range items {
+				var item model.Message
+				if json.Unmarshal([]byte(raw), &item) == nil {
+					out = append(out, item)
+				}
+			}
+			return out, len(out) > 0, nil
+		}
+		if !errors.Is(err, redis.Nil) {
+			c.MarkDegraded(err)
+		}
+	}
+	return c.readWindowFallback(key)
+}
+
+// SetWindow overwrites the cached recent message window.
+func (c *SessionCache) SetWindow(ctx context.Context, userID string, sessionID string, messages []model.Message, ttl time.Duration) error {
+	key := c.windowKey(userID, sessionID)
+	c.writeWindowFallback(key, messages, ttl)
+	if c.degraded.Load() {
+		return nil
+	}
+	pipe := c.client.TxPipeline()
+	pipe.Del(ctx, key)
+	for _, item := range messages {
+		raw, _ := json.Marshal(item)
+		pipe.RPush(ctx, key, raw)
+	}
+	pipe.Expire(ctx, key, ttl)
+	if _, err := pipe.Exec(ctx); err != nil {
 		c.MarkDegraded(err)
 		return err
 	}
@@ -214,4 +262,26 @@ func (c *SessionCache) readStreamFallback(key string) []string {
 		return nil
 	}
 	return strings.Split(item.Value, "\n")
+}
+
+func (c *SessionCache) writeWindowFallback(key string, messages []model.Message, ttl time.Duration) {
+	raw, _ := json.Marshal(messages)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.memKV[key] = fallbackItem{
+		Value:     string(raw),
+		ExpiresAt: time.Now().Add(ttl),
+	}
+}
+
+func (c *SessionCache) readWindowFallback(key string) ([]model.Message, bool, error) {
+	raw, ok, err := c.readFallback(key)
+	if err != nil || !ok || raw == "" {
+		return nil, false, err
+	}
+	var items []model.Message
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return nil, false, err
+	}
+	return items, true, nil
 }

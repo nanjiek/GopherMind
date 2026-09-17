@@ -75,9 +75,10 @@ func main() {
 	defer producer.Close()
 
 	openaiProvider := providers.NewOpenAIProvider(cfg.Model, logg)
+	kimiProvider := providers.NewKimiProvider(cfg.Model, logg)
 	ollamaProvider := providers.NewOllamaProvider(cfg.Model, logg)
 	bgeProvider := providers.NewBGEProvider(cfg.Model, logg)
-	modelRouter := factory.NewModelFactory(openaiProvider, ollamaProvider, bgeProvider, logg)
+	modelRouter := factory.NewModelFactory(openaiProvider, kimiProvider, ollamaProvider, bgeProvider, logg)
 
 	rag := ragclient.NewPythonClient(cfg.RAG, logg)
 	tokenManager := token.NewManager(cfg.Auth)

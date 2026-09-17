@@ -52,6 +52,7 @@ func NewRouter(
 	api.Use(authMW)
 	{
 		api.POST("/query", qh.Handle)
+		api.GET("/sessions", sh.ListSessions)
 		api.GET("/session/:id", sh.GetSession)
 		api.GET("/stream/:session", sth.Handle)
 		api.POST("/attachments", atth.Upload)

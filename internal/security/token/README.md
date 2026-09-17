@@ -1,15 +1,22 @@
-# internal/security/token 设计说明
+# 包说明
 
-## 设计定位
-该模块负责会话认证令牌体系，目标是把“身份声明”和“业务接口权限”解耦。
+## 包作用
+- 负责令牌签发、解析和校验。
+- 提供令牌摘要能力用于安全存储。
 
-## 核心设计思路
-1. 采用 Access + Refresh 双令牌：短 TTL Access 控制风险窗口，长 TTL Refresh 保障续会体验。
-2. Access 与 Refresh 使用不同签名密钥，降低单点泄漏风险。
-3. Refresh 采用轮换策略并落库哈希值，避免明文 token 持久化。
+## 实现逻辑
+1. 初始化时注入签名参数和有效期。
+2. 签发访问令牌与刷新令牌。
+3. 解析时校验签名、类型和过期状态。
+4. 使用摘要函数避免明文令牌落库。
 
-## 边界与依赖
-模块只负责签发、验签与声明约束，不处理用户密码、路由鉴权策略和设备风控。
+## 关键接口
+```go
+type Manager struct
+func (m *Manager) GenerateTokenPair(userID string, role string) (TokenPair, error)
+func (m *Manager) ParseAccessToken(raw string) (*Claims, error)
+func HashToken(token string) string
+```
 
-## 演进策略
-后续可扩展为多 Key 验签（KID + 轮转窗口）与租户级密钥隔离。
+## 协作关系
+- 被鉴权服务和鉴权中间件共同依赖。

@@ -63,6 +63,8 @@ services:
   rag:
     image: python:3.11-slim
     container_name: gophermind_rag
+    profiles:
+      - docker-rag
     working_dir: /workspace/python/rag_service
     volumes:
       - .:/workspace
@@ -106,7 +108,7 @@ services:
       MYSQL_DSN: root:root@tcp(mysql:3306)/gophermind?charset=utf8mb4&parseTime=True&loc=Local
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       REDIS_ADDRS: redis:6379
-      RAG_PYTHON_URL: http://rag:8000
+      RAG_PYTHON_URL: ${RAG_PYTHON_URL:-http://host.docker.internal:8000}
       JWT_ACCESS_SECRET_FILE: /run/secrets/jwt_access_secret
       JWT_REFRESH_SECRET_FILE: /run/secrets/jwt_refresh_secret
       AUTH_DEV_BYPASS: "false"
@@ -115,6 +117,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      KIMI_API_KEY: ${KIMI_API_KEY:-}
+      KIMI_BASE_URL: ${KIMI_BASE_URL:-https://api.moonshot.cn/v1}
+      KIMI_MODEL: ${KIMI_MODEL:-moonshot-v1-8k}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
       BGE_BASE_URL: ${BGE_BASE_URL:-http://host.docker.internal:8001}
@@ -131,8 +136,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      rag:
-        condition: service_started
       qdrant:
         condition: service_started
     restart: on-failure
@@ -188,6 +191,26 @@ services:
       "
     ports:
       - "18080:18080"
+    networks:
+      - app_network
+
+  frontend:
+    image: node:20-alpine
+    container_name: gophermind_frontend
+    working_dir: /workspace/frontend
+    volumes:
+      - .:/workspace
+    environment:
+      VITE_PROXY_TARGET: http://backend:9090
+    command: >
+      sh -c "
+        npm install &&
+        npm run dev -- --host 0.0.0.0 --port 5173
+      "
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
     networks:
       - app_network
 

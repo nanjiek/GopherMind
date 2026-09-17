@@ -13,19 +13,22 @@ import (
 	"gophermind/pkg/contracts/events"
 )
 
-// QueryService 提供同步问答流程。
+// QueryService handles synchronous QA requests.
 type QueryService struct {
-	repo     SessionRepository
-	sessions *SessionService
-	router   ModelRouter
-	rag      RAGClient
-	queue    QueueProducer
-	cache    SessionCache
-	logger   *zap.Logger
+	repo      SessionRepository
+	sessions  *SessionService
+	router    ModelRouter
+	rag       RAGClient
+	queue     QueueProducer
+	cache     SessionCache
+	memories  *MemoryService
+	traces    TraceReporter
+	evals     *EvalService
+	logger    *zap.Logger
 }
 
-// NewQueryService 构建 QueryService。
-func NewQueryService(repo SessionRepository, sessions *SessionService, router ModelRouter, rag RAGClient, queue QueueProducer, cache SessionCache, logger *zap.Logger) *QueryService {
+// NewQueryService builds QueryService.
+func NewQueryService(repo SessionRepository, sessions *SessionService, router ModelRouter, rag RAGClient, queue QueueProducer, cache SessionCache, memories *MemoryService, traces TraceReporter, evals *EvalService, logger *zap.Logger) *QueryService {
 	return &QueryService{
 		repo:     repo,
 		sessions: sessions,
@@ -33,50 +36,81 @@ func NewQueryService(repo SessionRepository, sessions *SessionService, router Mo
 		rag:      rag,
 		queue:    queue,
 		cache:    cache,
+		memories: memories,
+		traces:   traces,
+		evals:    evals,
 		logger:   logger,
 	}
 }
 
-// Query 执行同步问答：写用户消息 -> RAG -> 模型生成 -> 持久化回复。
+// Query executes synchronous QA.
 func (s *QueryService) Query(ctx context.Context, in model.QueryInput) (model.QueryOutput, error) {
 	modelType := normalizedModelType(in.ModelType)
 	success := false
 	start := time.Now()
+	requestID := uuid.NewString()
+	traceID := requestID
 	defer func() {
 		metrics.ObserveQueryLatency(time.Since(start))
 		metrics.IncQueryRequest(success, modelType, in.UseRAG)
 	}()
-
-	requestID := uuid.NewString()
-	jobID := uuid.NewString()
 
 	sessionID, err := s.ensureSessionAndUserMessage(ctx, in, requestID)
 	if err != nil {
 		return model.QueryOutput{}, err
 	}
 
-	traceID := requestID
-	_ = s.queue.PublishTask(ctx, events.TaskMessage{
-		EventType:      "query.task",
-		Version:        "v1",
-		JobID:          jobID,
-		IdempotencyKey: requestID,
-		UserID:         in.UserID,
-		SessionID:      sessionID,
-		RequestID:      requestID,
-		ModelType:      modelType,
-		Question:       in.Question,
-		UseRAG:         in.UseRAG,
-		TraceID:        traceID,
-		CreatedAt:      time.Now(),
-	})
+	jobID := uuid.NewString()
+	if s.queue != nil {
+		_ = s.queue.PublishTask(ctx, events.TaskMessage{
+			EventType:      "query.task",
+			Version:        "v1",
+			JobID:          jobID,
+			IdempotencyKey: requestID,
+			UserID:         in.UserID,
+			SessionID:      sessionID,
+			RequestID:      requestID,
+			ModelType:      modelType,
+			Question:       in.Question,
+			UseRAG:         in.UseRAG,
+			TraceID:        traceID,
+			CreatedAt:      time.Now(),
+		})
+	}
 
-	prompt, citations := s.buildPrompt(ctx, in.UserID, sessionID, in.Question, in.UseRAG)
+	prompt, rewrittenQuery, retrievedDocs, citations := s.buildPrompt(ctx, in.UserID, sessionID, in.DocumentID, in.Question, in.UseRAG)
+	answer := NoDataFallbackAnswer
+	usage := fallbackUsage()
+	if !(in.UseRAG && len(citations) == 0) {
+		modelCtx, cancel := context.WithTimeout(ctx, modelRequestTimeout(modelType))
+		defer cancel()
+		answer, usage, err = s.router.GenerateWithFallback(modelCtx, modelType, prompt)
+		if err != nil {
+			if s.queue != nil {
+				_ = s.queue.PublishResult(ctx, events.ResultMessage{
+					EventType:      "query.result",
+					Version:        "v1",
+					JobID:          jobID,
+					IdempotencyKey: requestID,
+					RequestID:      requestID,
+					SessionID:      sessionID,
+					UserID:         in.UserID,
+					Status:         "failed",
+					Error:          err.Error(),
+					TraceID:        traceID,
+					CreatedAt:      time.Now(),
+				})
+			}
+			return model.QueryOutput{}, err
+		}
+	}
 
-	modelCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-	answer, usage, err := s.router.GenerateWithFallback(modelCtx, modelType, prompt)
-	if err != nil {
+	if err := s.repo.AppendAssistantMessage(ctx, in.UserID, sessionID, answer, requestID, usage.Provider, modelType); err != nil {
+		return model.QueryOutput{}, err
+	}
+	_ = s.sessions.UpdateShortTermMemory(ctx, in.UserID, sessionID)
+
+	if s.queue != nil {
 		_ = s.queue.PublishResult(ctx, events.ResultMessage{
 			EventType:      "query.result",
 			Version:        "v1",
@@ -85,34 +119,35 @@ func (s *QueryService) Query(ctx context.Context, in model.QueryInput) (model.Qu
 			RequestID:      requestID,
 			SessionID:      sessionID,
 			UserID:         in.UserID,
-			Status:         "failed",
-			Error:          err.Error(),
+			Status:         "ok",
+			Answer:         answer,
+			Provider:       usage.Provider,
 			TraceID:        traceID,
 			CreatedAt:      time.Now(),
 		})
-		return model.QueryOutput{}, err
 	}
 
-	if err := s.repo.AppendAssistantMessage(ctx, in.UserID, sessionID, answer, requestID, usage.Provider, modelType); err != nil {
-		return model.QueryOutput{}, err
-	}
-
-	_ = s.cache.SetSummary(ctx, in.UserID, sessionID, in.Question+"\n"+answer, 24*time.Hour)
-
-	_ = s.queue.PublishResult(ctx, events.ResultMessage{
-		EventType:      "query.result",
-		Version:        "v1",
-		JobID:          jobID,
-		IdempotencyKey: requestID,
+	trace := QueryTrace{
+		TraceID:        traceID,
 		RequestID:      requestID,
 		SessionID:      sessionID,
 		UserID:         in.UserID,
-		Status:         "ok",
+		Model:          modelType,
+		Prompt:         prompt,
+		Question:       in.Question,
+		RewrittenQuery: rewrittenQuery,
+		RetrievedDocs:  retrievedDocs,
+		Citations:      citations,
 		Answer:         answer,
-		Provider:       usage.Provider,
-		TraceID:        traceID,
-		CreatedAt:      time.Now(),
-	})
+		Latency:        time.Since(start),
+		Status:         "ok",
+	}
+	if s.traces != nil {
+		_ = s.traces.ReportQuery(ctx, trace)
+	}
+	if s.evals != nil {
+		s.evals.DispatchIfSampled(ctx, requestID, traceID, in.UserID, sessionID, in.Question, answer, modelType, citations)
+	}
 
 	success = true
 	return model.QueryOutput{
@@ -129,7 +164,6 @@ func (s *QueryService) ensureSessionAndUserMessage(ctx context.Context, in model
 	if len(title) > 64 {
 		title = title[:64]
 	}
-
 	if in.SessionID == "" {
 		created, err := s.repo.CreateSessionWithFirstMessage(ctx, in.UserID, title, in.Question, requestID)
 		if err != nil {
@@ -137,40 +171,63 @@ func (s *QueryService) ensureSessionAndUserMessage(ctx context.Context, in model
 		}
 		return created.ID, nil
 	}
-
 	if err := s.repo.AppendUserMessage(ctx, in.UserID, in.SessionID, in.Question, requestID); err != nil {
 		return "", err
 	}
 	return in.SessionID, nil
 }
 
-func (s *QueryService) buildPrompt(ctx context.Context, userID string, sessionID string, question string, useRAG bool) (string, []model.Citation) {
+func (s *QueryService) buildPrompt(ctx context.Context, userID string, sessionID string, documentID string, question string, useRAG bool) (string, string, []model.RAGDocument, []model.Citation) {
 	summary, err := s.sessions.LoadSummary(ctx, userID, sessionID)
-	if err != nil {
+	if err != nil && s.logger != nil {
 		s.logger.Warn("load summary failed", zap.Error(err))
 	}
-	base := "You are a helpful assistant.\n"
+	window, err := s.sessions.LoadWindow(ctx, userID, sessionID)
+	if err != nil && s.logger != nil {
+		s.logger.Warn("load window failed", zap.Error(err))
+	}
+
+	base := "You are a medical QA assistant.\n" +
+		"Use retrieved evidence and conversation memory when available.\n" +
+		"If evidence is insufficient, state uncertainty and recommend professional care when appropriate.\n"
 	if summary != "" {
 		base += "Conversation summary:\n" + summary + "\n"
 	}
+	if len(window) > 0 {
+		base += "Recent conversation window:\n"
+		for _, item := range window {
+			base += "[" + item.Role + "] " + item.Content + "\n"
+		}
+	}
 
+	if s.memories != nil {
+		mems, err := s.memories.Search(ctx, userID, question, 3)
+		if err == nil && len(mems) > 0 {
+			base += "Long-term user memories:\n"
+			for _, item := range mems {
+				base += "- " + item.Content + "\n"
+			}
+		}
+	}
+
+	rewrittenQuery := strings.Join(strings.Fields(strings.TrimSpace(question)), " ")
 	var docs []model.RAGDocument
 	if useRAG {
-		retrieved, err := s.rag.Retrieve(ctx, userID, question, 20)
-		if err != nil {
+		retrieved, err := s.rag.Retrieve(ctx, userID, documentID, rewrittenQuery, 20)
+		if err != nil && s.logger != nil {
 			s.logger.Warn("rag retrieve failed", zap.Error(err))
 		}
 		if len(retrieved) > 0 {
-			reranked, err := s.rag.Rerank(ctx, question, retrieved, 5)
+			reranked, err := s.rag.Rerank(ctx, rewrittenQuery, retrieved, 5)
 			if err == nil {
 				docs = reranked
 			} else {
 				docs = retrieved
 			}
 		}
-		kg, _ := s.rag.KnowledgeGraphPlaceholder(ctx, question)
+		kg, _ := s.rag.KnowledgeGraphPlaceholder(ctx, rewrittenQuery)
 		if kg != "" {
-			base += "Knowledge Graph Context:\n" + kg + "\n"
+			base += "Knowledge graph context:\n" + kg + "\n"
 		}
 	}
 
@@ -187,7 +244,7 @@ func (s *QueryService) buildPrompt(ctx context.Context, userID string, sessionID
 		}
 	}
 	base += "\nUser question:\n" + question
-	return base, citations
+	return base, rewrittenQuery, docs, citations
 }
 
 func normalizedModelType(modelType string) string {

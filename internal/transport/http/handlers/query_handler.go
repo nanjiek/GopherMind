@@ -11,18 +11,19 @@ import (
 	httpcontracts "gophermind/pkg/contracts/http"
 )
 
-// QueryHandler 处理 /query。
+// QueryHandler handles /query.
 type QueryHandler struct {
-	svc    *service.QueryService
-	logger *zap.Logger
+	svc       *service.QueryService
+	documents *service.DocumentService
+	logger    *zap.Logger
 }
 
-// NewQueryHandler 构建 QueryHandler。
-func NewQueryHandler(svc *service.QueryService, logger *zap.Logger) *QueryHandler {
-	return &QueryHandler{svc: svc, logger: logger}
+// NewQueryHandler builds QueryHandler.
+func NewQueryHandler(svc *service.QueryService, documents *service.DocumentService, logger *zap.Logger) *QueryHandler {
+	return &QueryHandler{svc: svc, documents: documents, logger: logger}
 }
 
-// Handle 执行同步问答。
+// Handle executes synchronous QA.
 func (h *QueryHandler) Handle(c *gin.Context) {
 	var req httpcontracts.QueryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -36,12 +37,33 @@ func (h *QueryHandler) Handle(c *gin.Context) {
 		return
 	}
 
+	if req.DocumentID != "" && h.documents != nil {
+		doc, err := h.documents.Get(c.Request.Context(), userID, req.DocumentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, httpcontracts.Err(40431, "document not found"))
+			return
+		}
+		if h.documents.ShouldBlockQuery(doc) {
+			c.JSON(http.StatusConflict, httpcontracts.APIResponse{
+				Code:    40931,
+				Message: "document still indexing; use stream API to wait automatically",
+				Data: gin.H{
+					"document_id": req.DocumentID,
+					"job_id":      doc.JobID,
+					"status":      doc.Status,
+				},
+			})
+			return
+		}
+	}
+
 	out, err := h.svc.Query(c.Request.Context(), model.QueryInput{
-		UserID:    userID,
-		SessionID: req.SessionID,
-		Question:  req.Question,
-		ModelType: req.ModelType,
-		UseRAG:    req.UseRAG,
+		UserID:     userID,
+		SessionID:  req.SessionID,
+		DocumentID: req.DocumentID,
+		Question:   req.Question,
+		ModelType:  req.ModelType,
+		UseRAG:     req.UseRAG,
 	})
 	if err != nil {
 		if h.logger != nil {

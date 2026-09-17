@@ -44,6 +44,22 @@ func (f *fakeRepo) GetSession(_ context.Context, _ string, sessionID string) (mo
 	return f.sessions[sessionID], nil
 }
 
+func (f *fakeRepo) ListSessions(_ context.Context, userID string, limit int) ([]model.Session, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	out := make([]model.Session, 0, limit)
+	for _, session := range f.sessions {
+		if session.UserID == userID {
+			out = append(out, session)
+		}
+	}
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) ListMessages(_ context.Context, _ string, sessionID string) ([]model.Message, error) {
 	return f.msgs[sessionID], nil
 }

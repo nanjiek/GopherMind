@@ -37,6 +37,12 @@ func (f *handlerFakeRepo) AppendAssistantMessage(_ context.Context, _ string, _ 
 func (f *handlerFakeRepo) GetSession(_ context.Context, _ string, _ string) (model.Session, error) {
 	return f.session, nil
 }
+func (f *handlerFakeRepo) ListSessions(_ context.Context, userID string, limit int) ([]model.Session, error) {
+	if f.session.UserID == userID {
+		return []model.Session{f.session}, nil
+	}
+	return []model.Session{}, nil
+}
 func (f *handlerFakeRepo) ListMessages(_ context.Context, _ string, _ string) ([]model.Message, error) {
 	return f.msgs, nil
 }

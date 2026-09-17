@@ -1,15 +1,22 @@
-﻿# internal/transport/http/middleware 设计说明
+# 包说明
 
-## 设计定位
-该模块沉淀横切治理能力，保障每个请求都经过统一控制面。
+## 包作用
+- 提供请求级横切处理，包括追踪、恢复、鉴权和指标采集。
 
-## 核心设计思路
-1. 鉴权中间件负责身份建立，业务层只消费 user context。
-2. Recovery 中间件兜底异常，防止单请求异常放大为进程级故障。
-3. Request-ID 中间件提供链路标识，打通日志与追踪关联。
+## 实现逻辑
+1. 为每个请求注入唯一标识便于链路排障。
+2. 捕获异常并转换为稳定错误响应。
+3. 解析令牌并执行角色授权。
+4. 统计请求耗时和状态码指标。
 
-## 边界与依赖
-边界在于横切策略执行，不承担业务领域判断。
+## 关键接口
+```go
+func RequestID() gin.HandlerFunc
+func Recovery(logger *zap.Logger) gin.HandlerFunc
+func Auth(cfg config.AuthConfig, tokenM *token.Manager, logger *zap.Logger) gin.HandlerFunc
+func HTTPMetrics() gin.HandlerFunc
+```
 
-## 演进策略
-后续可增加限流、配额、审计与灰度标记中间件。
+## 协作关系
+- 由路由模块统一注册。
+- 依赖鉴权和观测模块提供底层能力。
