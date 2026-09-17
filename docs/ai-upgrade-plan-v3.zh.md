@@ -30,8 +30,8 @@
 ## 3. 实施原则与架构决策
 
 1. 沿用 `cmd/server`、`internal/core/service` 和现有 transport/repo 分层，通过接口逐步接入新模块；不为匹配原文目录而重排全部项目。
-2. PostgreSQL 是目标存储。先补适配接口和迁移脚本，再迁移会话域及新增 Event/Task/Memory；认证等旧业务可以暂留 MySQL，明确每类数据唯一写入主库。
-3. 不使用未经协调的 MySQL/PostgreSQL 同步双写。迁移期采用源库事务 Outbox、幂等投递、快照加增量追平，切换前验证数量、顺序、归属和内容校验。
+2. PostgreSQL 是新架构的唯一关系数据库。用户明确决定废弃全部 MySQL 旧数据，因此只创建全新的 PostgreSQL schema，不实施历史数据迁移、双写、回填或对账。
+3. 切换以版本边界为准：新版本只读写 PostgreSQL；MySQL 仅属于旧版本。回滚采用应用版本和独立数据库恢复，不允许新版本回退读取已经废弃的 MySQL 数据。
 4. Go 负责入口、授权、工具执行、预算和事实写入；LangGraph 初步按独立 Python 执行服务评估。先做最小 checkpoint 恢复验证，再冻结协议；图节点与 Task DAG 不能各自成为同一任务的调度权威。
 5. 基础权限、审计、幂等、超时、输出校验从首个阶段开始。最后阶段补齐系统化验证与发布治理，不能最后才加入安全控制。
 6. 保留现有同步和流式 API，通过配置开关切换新旧执行路径。发生数据切换后，回滚必须处理新增数据，不能只切回旧读路径。
@@ -43,7 +43,7 @@
 - 盘点启动入口、数据表、API、Provider、RAG 实际路径、队列和现有测试，输出能力清单与依赖图。
 - 运行 Go 编译/测试、前端构建及可用的 Python 测试，记录环境依赖、原有失败和复现命令。Go RAG 引用了 `github.com/tmc/langchaingo/textsplitter`，当前 `go.mod` 未列出该模块，应作为编译核验项。
 - 固化问答、流式、缓存恢复、RAG、记忆和 MCP 冒烟用例；采集延迟和 Token 基线，外部服务使用明确标识的测试环境或替身。
-- 编写三份 ADR：数据库渐进迁移、LangGraph/Go 执行边界、RAG 主路径及 DeepSeek 适配方案。
+- 编写三份 ADR：PostgreSQL 空库切换、LangGraph/Go 执行边界、RAG 主路径及 DeepSeek 适配方案。
 - 建立版本化小型评测集，覆盖无证据、否定、时间、剂量、特殊人群、权限隔离与重复请求。
 
 验收：能明确“目前哪些链路可以运行、哪些失败早已存在”；关键边界有书面决策，后续阶段不依赖未验证的 SDK 或模型参数。
@@ -51,11 +51,11 @@
 ### P1：事件事实源与最小 Surface（对应原文阶段一）
 
 - 新增 `internal/session/eventlog`、`projection`、`surface`，定义事件类型、schema version、会话序号、归属范围、请求幂等键和 source message ID。
-- 添加 PostgreSQL 适配与版本化 migration，支持追加事件、按序读取、唯一约束和 Projection checkpoint。
-- 先完成历史回填、增量追平和只读影子对比，再切换写入主库；同一会话写入需要确定的顺序及重复键行为。
+- 添加 PostgreSQL 适配与版本化 schema migration，支持追加事件、按序读取、唯一约束和 Projection checkpoint。
+- 从空库初始化并切换所有关系数据读写；不导入 MySQL 旧记录。同一会话写入需要确定的顺序及重复键行为。
 - QueryService/StreamService 通过接口生成基础 Surface，复用现有窗口逻辑；Redis 使用含范围和版本的缓存键。
 
-验收：历史回填重复执行不重复入库；Redis 丢失可重建；事件重放与原始历史一致；跨用户/患者读取被拒绝；旧 API 契约兼容。
+验收：空库 migration 可重复执行；Redis 丢失可从 PostgreSQL 重建；事件重放与 PostgreSQL 事实一致；跨用户/患者读取被拒绝；旧 API 契约兼容。
 
 ### P2：最小 Agent Runtime（对应阶段二）
 
@@ -97,7 +97,7 @@
 
 - 增加 candidate/confirmed/conflicted/expired/retracted 等状态、来源证据、版本与确认 API/UI。
 - 权威库先提交，事务 Outbox 异步更新 Pinecone；召回后回查权威状态与权限，过滤撤回/删除/过期记录。
-- 老记忆保留原始来源并标记迁移状态，不自动把文本转成已确认病史。
+- 新系统不导入旧记忆；所有患者记忆从 PostgreSQL 空库重新建立，模型推断不能自动成为已确认病史。
 - 先补 Retrieval Trace 与语义重写测试，再调参；加入知识版本、影子索引、发布指针和回滚。
 
 验收：向量同步失败不会改变事实；撤回后即使索引未更新也不能参与回答；否定/时间/剂量不被重写丢失；更新失败保持当前可用知识版本。
@@ -115,7 +115,7 @@
 
 每个阶段拆为可独立评审的设计单元，每个单元包含：需求 ID、原文章节、接口/表结构、实现位置、单元/集成/故障用例、观测字段、兼容与回滚说明。没有 schema 变化的单元标注 migration 不适用。
 
-迁移采用 expand → backfill → reconcile → switch → observe → contract。旧表仅在观察期结束且备份恢复演练通过后考虑收缩。切回旧存储之前必须回放新数据并对账；做不到时暂停写入并恢复，不静默退回过时数据。
+数据库切换不执行数据搬迁。采用 create schema → verify empty database → deploy PostgreSQL-only version → smoke test → observe 的流程。旧 MySQL 数据不参与新系统，不作为回滚数据源。回滚需要恢复与目标应用版本匹配的 PostgreSQL 备份或清空测试环境后重新初始化。
 
 通用故障用例包括：提交成功但响应丢失、同键并发请求、缓存不可用、索引同步失败、执行中取消、租约过期、重启恢复和越权访问。单元测试可用替身；事务、唯一约束和 CAS 必须在真实目标数据库集成环境验证。
 

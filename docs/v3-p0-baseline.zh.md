@@ -40,8 +40,8 @@ python -c "import ast,pathlib; files=list(pathlib.Path('python/rag_service/app')
 ## 后续 P0 节点
 
 - P0.2：整理可提交业务基线；补忽略规则，锁定依赖并修复构造函数装配，在保留既有功能的前提下运行 Go 测试与前端构建。修复后独立 PR，记录真实通过项与剩余失败。
-- P0.3：完成数据库迁移、LangGraph/Go 边界、RAG 主路径三份 ADR；外部 SDK/模型能力在选型时核验。
-- P0.4：建立最小评测数据和真实依赖冒烟清单，输出 P1 事件接口、表结构、迁移及回滚设计。
+- P0.3：完成 PostgreSQL 空库切换、LangGraph/Go 边界、RAG 主路径三份 ADR；外部 SDK/模型能力在选型时核验。
+- P0.4：建立最小评测数据和真实依赖冒烟清单，输出 P1 事件接口、PostgreSQL 表结构、初始化及回滚设计。
 
 进入 P1 前必须完成 P0 剩余项；本报告不构成 P0 完成声明。
 
