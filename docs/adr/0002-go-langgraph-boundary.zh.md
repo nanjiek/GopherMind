@@ -1,6 +1,6 @@
 # ADR-0002：Go 控制面与 Python LangGraph 执行边界
 
-状态：接受，P1 前需完成 PostgreSQL 恢复验证  
+状态：接受，P1 前需完成 PostgreSQL 恢复验证
 日期：2026-09-17
 
 ## 背景
