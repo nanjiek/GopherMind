@@ -1,10 +1,10 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T10:38:00+08:00
+Updated: 2026-09-18T10:41:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p2-step2-component-startup`
-Component startup implementation commit: `7a1da37506d88a4f6245b9171ad2177d686b1c96`
+Branch: `codex/p1-step2-event-surface`
+HEAD: `55baae147517ad0a30b1d71faf59d91a586db02d`
 
 ## Objective
 
@@ -35,13 +35,14 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
   - Component startup is one Scope lifecycle transaction: a startup error rolls back resources registered by the failing and already-started components in LIFO order.
   - Tests cover dependency ordering, unavailable dependencies, duplicate providers, and startup rollback.
 - No database schema, migration, query-path, stream-path, state machine, or external-service behavior changed in P2 Step 2.
+- PR #10 merged into `codex/p1-step2-event-surface` at `55baae147517ad0a30b1d71faf59d91a586db02d`; its GitHub `go` and `frontend` checks passed before merge.
 
 ## Current state
 
-- Working tree: clean after component startup commits were pushed.
+- Working tree: no unrelated changes before this checkpoint metadata update.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
-- PR #10 is open: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
+- PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
 
 ## Validation
 
@@ -55,8 +56,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 
 ## Next actions
 
-1. Have PR #10 reviewed and merged without widening its scope.
-2. Keep the Run/Action/Observation state machine, revision/CAS, Hook Pipeline, persistence, and existing service integration out of this PR.
+1. Define and implement the next P2 node as a separate branch; choose exactly one of the Run/Action/Observation state machine, revision/CAS, or Hook Pipeline rather than combining them.
+2. Keep persistence and existing service integration separate until the selected runtime contract has focused tests.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
