@@ -1,20 +1,21 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T11:15:00+08:00
+Updated: 2026-09-18T11:22:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p1-step2-event-surface`
-HEAD: `73f71b0e06bdec73a15c385b9a1e0784ffe06c5f`
+Branch: `codex/p3-step1-gateway-routing`
+Gateway routing implementation commit: `508ded0659b9f53bb11abebd175a0c5465f080bb`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0, P1, and P2 are complete. The next phase is P3 Gateway and capability governance; durable collaboration begins later in P4.
+Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. P3 Step 1 establishes the Gateway model/workflow routing contract; capability governance and execution remain later P3 nodes.
 
 ## User decisions and standing constraints
 
 - Use a fresh PostgreSQL database. Old MySQL data is invalid; do not implement migration, dual writes, CDC, backfill, or reconciliation.
 - Complete one reviewable node at a time; each completed node updates this checkpoint, is committed, pushed, and submitted as a GitHub PR.
 - P2 completed only in-process revision/CAS, failure/progress controls, Hook Pipeline, and a minimal synchronous QueryService wrapper. PostgreSQL Run persistence, Event Log writes, and streaming integration remain explicitly deferred.
+- P3 Step 1 is limited to trusted risk/task routing. Do not connect HTTP, QueryService, StreamService, Provider execution, Capability policy, Skill/Tool/MCP execution, budgets, or persistence in this node.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
 ## Completed
@@ -51,15 +52,22 @@ Upgrade GopherMind according to the V3 architecture plan. P0, P1, and P2 are com
   - The existing synchronous `QueryService` now executes its existing model call and final answer through the minimal in-memory single-agent Runtime protocol, without changing its external API or persisting Run records.
 - No PostgreSQL Run schema, revision persistence, Event Log writes, StreamService integration, or new external dependency is introduced by P2 Step 4.
 - PR #12 merged into `codex/p1-step2-event-surface` at `73f71b0e06bdec73a15c385b9a1e0784ffe06c5f`; GitHub `go` and `frontend` checks passed before merge. P2 is complete at this commit.
+- P3 Step 1 Gateway routing is committed in `508ded0659b9f53bb11abebd175a0c5465f080bb`:
+  - trusted L0–L3 risk and bounded task types route deterministically to versioned workflows and configured logical model aliases;
+  - L3/red-flag requests select `manual-escalation` and no model route;
+  - invalid requests and model-route configuration are rejected;
+  - tests cover low/high/red-flag routes, version defaults, and invalid input.
+- No external behavior, model call, schema, capability, or execution path changed in P3 Step 1.
 
 ## Current state
 
-- Working tree: no unrelated changes before this checkpoint metadata update.
+- Working tree: expected clean after this checkpoint update is committed; P3 Step 1 code is ahead of `origin/codex/p1-step2-event-surface`.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
 - PR #11 is merged: `codex/p2-step3-run-state-machine` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/11.
 - PR #12 is merged: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
+- P3 Step 1 has no PR yet; it must use `codex/p1-step2-event-surface` as its base.
 
 ## Validation
 
@@ -73,13 +81,17 @@ Upgrade GopherMind according to the V3 architecture plan. P0, P1, and P2 are com
 - `go test ./...` — passed after P2 Step 4.
 - `go build ./cmd/...` — passed after P2 Step 4.
 - `go vet ./...` — passed after P2 Step 4.
+- `go test ./internal/agent/gateway` — passed after P3 Step 1.
+- `go test ./...` — passed after P3 Step 1.
+- `go build ./cmd/...` — passed after P3 Step 1.
+- `go vet ./...` — passed after P3 Step 1.
 - `git diff --check` — passed before the lifecycle commit.
 - `go test -race ./internal/agent/runtime` — not runnable in this workstation environment: Go reports `-race requires cgo; enable cgo by setting CGO_ENABLED=1`; `go env` reports `CGO_ENABLED=0` and no `gcc`, `clang`, or `cl` executable is installed. No toolchain installation was attempted because it is outside this node's scope.
 
 ## Next actions
 
-1. Start P3 on a new branch from this head with exactly one Gateway subnode: model/workflow routing, Capability policy, or a constrained Skill/MCP execution path.
-2. Keep PostgreSQL Run persistence, durable Task DAG/Mailbox, and multi-agent workflow work out of the first P3 subnode.
+1. Commit this refreshed checkpoint, push `codex/p3-step1-gateway-routing`, and create its PR against `codex/p1-step2-event-surface`.
+2. After merge, choose one separate P3 node: Capability policy or a constrained Skill/MCP execution path. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
@@ -96,6 +108,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0, P1, and P2 are com
 - `internal/agent/runtime/hook.go` — Scope-bound ordered Hook Pipeline.
 - `internal/agent/runtime/controller.go` — Hook-wrapped in-process Run mutation boundary.
 - `internal/core/service/query_service.go` — existing synchronous QA path's minimal Runtime wrapper.
+- `internal/agent/gateway/router.go` — trusted Gateway model/workflow routing contract.
+- `docs/p3-step1-gateway-routing.zh.md` — P3 Step 1 scope and acceptance.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
