@@ -123,7 +123,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Current state
 
-- Working tree: clean after the P4 Step 4 implementation commit; this checkpoint update is the only pending tracked change until committed.
+- Working tree: clean after the P4 Step 4 PR checkpoint update is committed and pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -137,7 +137,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #18 is merged: `codex/p4-step1-fixed-workflow-graph` -> `codex/p1-step2-event-surface` at `c53d9e25b2cc04b3886bd40a9371ee121c9ffd39`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/18.
 - PR #19 is merged: `codex/p4-step2-fixed-workflow-runner` -> `codex/p1-step2-event-surface` at `c336f3f8010effe7e6e55b70ef6800d450c0d409`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/19.
 - PR #20 is merged: `codex/p4-step3-workflow-checkpoint` -> `codex/p1-step2-event-surface` at `ac7d8709c7abe1a103e4f6ead2064537162ca3e6`; GitHub `go` and `frontend` checks passed after checkpoint test fixes — https://github.com/nanjiek/GopherMind/pull/20.
-- P4 Step 4 branch: `codex/p4-step4-static-workflow-recovery` -> `codex/p1-step2-event-surface`; PR creation is the next authorized action.
+- PR #21 is open: `codex/p4-step4-static-workflow-recovery` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/21.
 
 ## Validation
 
@@ -192,7 +192,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Next actions
 
-1. Push this P4 Step 4 branch and create its PR with base `codex/p1-step2-event-surface`; then record its URL/state here.
+1. Review and merge PR #21 after its required GitHub checks pass.
 2. Select P4 Step 5 as a separate reviewable contract: durable Task/DAG identity and dependency validation, before Mailbox delivery and lease/fencing.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
