@@ -139,6 +139,54 @@ func TestRunFailureTerminatesPendingWork(t *testing.T) {
 	}
 }
 
+func TestRunCASRejectsStaleRevision(t *testing.T) {
+	run := newTestRun(t, 2)
+	initial := run.Snapshot().Revision
+	if err := run.TransitionCAS(initial, RunLoadingContext); err != nil {
+		t.Fatalf("TransitionCAS() error = %v", err)
+	}
+	if err := run.TransitionCAS(initial, RunRouting); !errors.Is(err, ErrRevisionConflict) {
+		t.Fatalf("stale TransitionCAS() error = %v, want ErrRevisionConflict", err)
+	}
+	if got := run.Snapshot().Revision; got != initial+1 {
+		t.Fatalf("revision = %d, want %d", got, initial+1)
+	}
+}
+
+func TestRunTerminatesRepeatedNoProgress(t *testing.T) {
+	run, err := NewRun(RunSpec{RunID: "run-1", WorkflowID: "triage", WorkflowVersion: "v1", MaxSteps: 3, MaxNoProgress: 1})
+	if err != nil {
+		t.Fatalf("NewRun() error = %v", err)
+	}
+	for _, status := range []RunStatus{RunLoadingContext, RunRouting, RunRunning} {
+		if err := run.Transition(status); err != nil {
+			t.Fatalf("Transition(%s) error = %v", status, err)
+		}
+	}
+	if err := run.SubmitAction(testAction("action-1", 1, ActionCallTool)); err != nil {
+		t.Fatalf("first SubmitAction() error = %v", err)
+	}
+	if err := run.Observe(Observation{ObservationID: "observation-1", RunID: "run-1", ActionID: "action-1", Step: 1, Output: []byte(`{}`)}); err != nil {
+		t.Fatalf("Observe() error = %v", err)
+	}
+	if err := run.SubmitAction(testAction("action-2", 2, ActionCallTool)); !errors.Is(err, ErrNoProgress) {
+		t.Fatalf("repeated SubmitAction() error = %v, want ErrNoProgress", err)
+	}
+	if got := run.Snapshot(); got.Status != RunFailed || got.FailureKind != FailureNoProgress || got.ErrorCode != string(FailureNoProgress) {
+		t.Fatalf("no-progress snapshot = %#v", got)
+	}
+}
+
+func TestRunFailWithStoresClassification(t *testing.T) {
+	run := newRunningRun(t, 1)
+	if err := run.FailWith(FailureDependency, "rag_unavailable"); err != nil {
+		t.Fatalf("FailWith() error = %v", err)
+	}
+	if got := run.Snapshot(); got.FailureKind != FailureDependency || got.ErrorCode != "rag_unavailable" {
+		t.Fatalf("failure snapshot = %#v", got)
+	}
+}
+
 func newRunningRun(t *testing.T, maxSteps int) *Run {
 	t.Helper()
 	run := newTestRun(t, maxSteps)

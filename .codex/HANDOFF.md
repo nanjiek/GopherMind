@@ -1,20 +1,20 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T10:51:00+08:00
+Updated: 2026-09-18T11:12:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p2-step3-run-state-machine`
-Run state-machine implementation commit: `0e90d678a0e1973ae62a4665e645869cd2545a0e`
+Branch: `codex/p2-step4-runtime-completion`
+P2 completion implementation commit: `6982eeb7bf25790a6280a58069865b4136fddcd2`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. P2 Steps 1–3 provide lifecycle, component startup, and an in-memory Run/Action/Observation protocol; revision/CAS, Hook Pipeline, persistence, and service integration remain later nodes.
+Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. This branch completes P2's in-process runtime contract; durable persistence and further capability integration begin in P3/P4.
 
 ## User decisions and standing constraints
 
 - Use a fresh PostgreSQL database. Old MySQL data is invalid; do not implement migration, dual writes, CDC, backfill, or reconciliation.
 - Complete one reviewable node at a time; each completed node updates this checkpoint, is committed, pushed, and submitted as a GitHub PR.
-- Keep P2 Step 3 limited to the in-memory `internal/agent/runtime` Run/Action/Observation state machine. Do not add revision/CAS, Hook Pipeline, PostgreSQL persistence, or QueryService/StreamService integration.
+- P2 completion includes only in-process revision/CAS, failure/progress controls, Hook Pipeline, and a minimal synchronous QueryService wrapper. Do not add PostgreSQL Run persistence, Event Log writes, or streaming integration.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
 ## Completed
@@ -36,6 +36,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
   - Tests cover dependency ordering, unavailable dependencies, duplicate providers, and startup rollback.
 - No database schema, migration, query-path, stream-path, state machine, or external-service behavior changed in P2 Step 2.
 - PR #10 merged into `codex/p1-step2-event-surface` at `55baae147517ad0a30b1d71faf59d91a586db02d`; its GitHub `go` and `frontend` checks passed before merge.
+- PR #11 merged into `codex/p1-step2-event-surface` at `60444175ec45f6331b351b6c001e0a0c618de83b`; it delivers the in-memory Run/Action/Observation state machine.
 - P2 Step 3 Run/Action/Observation state machine is committed in `0e90d678a0e1973ae62a4665e645869cd2545a0e`:
   - Run states cover `created`, context loading, routing, running, all four wait states, validating, completion, retry, failure, cancellation, and expiry.
   - Structured actions are restricted to the six V3 action types and deterministically enter their matching wait/validation state; an observation for the pending action resumes the run.
@@ -43,14 +44,21 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
   - State and snapshots are mutex-protected and snapshot JSON buffers are copied; this node has no revision/CAS or persistence contract.
   - Tests cover success, all action wait-state mappings, observation resume, invalid transitions/observations, maximum steps, and terminal failure behavior.
 - No database schema, migration, query-path, stream-path, Hook Pipeline, revision/CAS, or external-service behavior changed in P2 Step 3.
+- P2 Step 4 completion is committed in `6982eeb7bf25790a6280a58069865b4136fddcd2`:
+  - Run snapshots carry monotonically increasing revisions; CAS variants prevent stale transitions, actions, observations, completion, and current-node changes.
+  - Run validates deadlines, maximum steps, structured failure classes, and repeated action fingerprints; configured no-progress limits terminate with a stable `no_progress` failure.
+  - `Pipeline` provides ordered Before/reverse After hooks, rejection, error propagation, and Scope-bound automatic unregistration. `Controller` applies the pipeline around Run mutations.
+  - The existing synchronous `QueryService` now executes its existing model call and final answer through the minimal in-memory single-agent Runtime protocol, without changing its external API or persisting Run records.
+- No PostgreSQL Run schema, revision persistence, Event Log writes, StreamService integration, or new external dependency is introduced by P2 Step 4.
 
 ## Current state
 
-- Working tree: clean after run state-machine commits were pushed.
+- Working tree: clean after P2 completion commits were pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
-- PR #11 is open: `codex/p2-step3-run-state-machine` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/11.
+- PR #11 is merged: `codex/p2-step3-run-state-machine` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/11.
+- PR #12 is open: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
 
 ## Validation
 
@@ -60,13 +68,17 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 - `go vet ./...` — passed.
 - `go test ./internal/agent/runtime -count=20` — passed after P2 Step 2.
 - `go test ./internal/agent/runtime -count=20` — passed after P2 Step 3.
+- `go test ./internal/agent/runtime -count=20` — passed after P2 Step 4.
+- `go test ./...` — passed after P2 Step 4.
+- `go build ./cmd/...` — passed after P2 Step 4.
+- `go vet ./...` — passed after P2 Step 4.
 - `git diff --check` — passed before the lifecycle commit.
 - `go test -race ./internal/agent/runtime` — not runnable in this workstation environment: Go reports `-race requires cgo; enable cgo by setting CGO_ENABLED=1`; `go env` reports `CGO_ENABLED=0` and no `gcc`, `clang`, or `cl` executable is installed. No toolchain installation was attempted because it is outside this node's scope.
 
 ## Next actions
 
-1. Have PR #11 reviewed and merged without widening its scope.
-2. Keep revision/CAS, Hook Pipeline, persistence, and existing service integration out of PR #11.
+1. Have PR #12 reviewed and merged without widening its scope.
+2. After merge, begin P3 as a separate node for model/workflow routing, Capability policy, or a constrained Skill/MCP execution path; do not add durable Task DAG/Mailbox work yet.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
@@ -80,6 +92,9 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 - `internal/agent/runtime/group.go` — bounded cancellation-aware task group.
 - `internal/agent/runtime/component.go` — ComponentSpec validation, dependency resolution, and transactional startup.
 - `internal/agent/runtime/run.go` — in-memory Run/Action/Observation state machine and protocol validation.
+- `internal/agent/runtime/hook.go` — Scope-bound ordered Hook Pipeline.
+- `internal/agent/runtime/controller.go` — Hook-wrapped in-process Run mutation boundary.
+- `internal/core/service/query_service.go` — existing synchronous QA path's minimal Runtime wrapper.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
