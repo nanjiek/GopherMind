@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,25 @@ var (
 	ErrInvalidAction      = errors.New("runtime action is invalid")
 	ErrInvalidObservation = errors.New("runtime observation is invalid")
 	ErrMaxStepsExceeded   = errors.New("runtime run maximum steps exceeded")
+	ErrRevisionConflict   = errors.New("runtime run revision conflict")
+	ErrNoProgress         = errors.New("runtime run made no progress")
+	ErrDeadlineExceeded   = errors.New("runtime run deadline exceeded")
+)
+
+// FailureKind classifies a terminal runtime failure without exposing model
+// reasoning. Retry policy remains a later executor concern.
+type FailureKind string
+
+const (
+	FailureTransient  FailureKind = "transient"
+	FailureTimeout    FailureKind = "timeout"
+	FailureValidation FailureKind = "validation"
+	FailureContext    FailureKind = "context"
+	FailureDependency FailureKind = "dependency"
+	FailureConflict   FailureKind = "conflict"
+	FailurePolicy     FailureKind = "policy"
+	FailureNoProgress FailureKind = "no_progress"
+	FailurePermanent  FailureKind = "permanent"
 )
 
 // RunStatus is the explicit lifecycle state of a single agent run.
@@ -57,6 +77,7 @@ type RunSpec struct {
 	WorkflowID      string
 	WorkflowVersion string
 	MaxSteps        int
+	MaxNoProgress   int
 	Deadline        time.Time
 	TokenBudget     int64
 	CostBudget      float64
@@ -99,7 +120,9 @@ type RunSnapshot struct {
 	Status       RunStatus
 	CurrentNode  string
 	StepCount    int
+	Revision     int64
 	ErrorCode    string
+	FailureKind  FailureKind
 	Actions      []Action
 	Observations []Observation
 }
@@ -112,22 +135,26 @@ type Run struct {
 	status       RunStatus
 	currentNode  string
 	stepCount    int
+	revision     int64
 	errorCode    string
+	failureKind  FailureKind
 	actions      []Action
 	observations []Observation
 	pending      Action
 	hasPending   bool
+	lastProgress string
+	noProgress   int
 }
 
 // NewRun creates an in-memory run in the created state.
 func NewRun(spec RunSpec) (*Run, error) {
-	if spec.RunID == "" || spec.WorkflowID == "" || spec.WorkflowVersion == "" || spec.MaxSteps <= 0 {
+	if spec.RunID == "" || spec.WorkflowID == "" || spec.WorkflowVersion == "" || spec.MaxSteps <= 0 || spec.MaxNoProgress < 0 {
 		return nil, fmt.Errorf("%w: run ID, workflow ID, workflow version, and positive max steps are required", ErrInvalidRun)
 	}
 	if spec.TokenBudget < 0 || spec.CostBudget < 0 {
 		return nil, fmt.Errorf("%w: budgets cannot be negative", ErrInvalidRun)
 	}
-	return &Run{spec: spec, status: RunCreated}, nil
+	return &Run{spec: spec, status: RunCreated, revision: 1}, nil
 }
 
 // Transition moves the run through core lifecycle edges. SubmitAction, Observe,
@@ -137,6 +164,20 @@ func NewRun(spec RunSpec) (*Run, error) {
 func (r *Run) Transition(next RunStatus) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.transitionLocked(next)
+}
+
+// TransitionCAS performs a transition only if expectedRevision is current.
+func (r *Run) TransitionCAS(expectedRevision int64, next RunStatus) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.requireRevisionLocked(expectedRevision); err != nil {
+		return err
+	}
+	return r.transitionLocked(next)
+}
+
+func (r *Run) transitionLocked(next RunStatus) error {
 	if r.status.terminal() {
 		return fmt.Errorf("%w: %s", ErrTerminalRun, r.status)
 	}
@@ -147,6 +188,7 @@ func (r *Run) Transition(next RunStatus) error {
 	if next == RunRetryScheduled || next == RunFailed || next == RunCancelled || next == RunExpired {
 		r.hasPending = false
 	}
+	r.revision++
 	return nil
 }
 
@@ -154,10 +196,25 @@ func (r *Run) Transition(next RunStatus) error {
 func (r *Run) SetCurrentNode(node string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.setCurrentNodeLocked(node)
+}
+
+// SetCurrentNodeCAS updates the active node only if expectedRevision is current.
+func (r *Run) SetCurrentNodeCAS(expectedRevision int64, node string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.requireRevisionLocked(expectedRevision); err != nil {
+		return err
+	}
+	return r.setCurrentNodeLocked(node)
+}
+
+func (r *Run) setCurrentNodeLocked(node string) error {
 	if r.status.terminal() {
 		return fmt.Errorf("%w: %s", ErrTerminalRun, r.status)
 	}
 	r.currentNode = node
+	r.revision++
 	return nil
 }
 
@@ -166,6 +223,20 @@ func (r *Run) SetCurrentNode(node string) error {
 func (r *Run) SubmitAction(action Action) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.submitActionLocked(action)
+}
+
+// SubmitActionCAS records an action only if expectedRevision is current.
+func (r *Run) SubmitActionCAS(expectedRevision int64, action Action) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.requireRevisionLocked(expectedRevision); err != nil {
+		return err
+	}
+	return r.submitActionLocked(action)
+}
+
+func (r *Run) submitActionLocked(action Action) error {
 	if r.status.terminal() {
 		return fmt.Errorf("%w: %s", ErrTerminalRun, r.status)
 	}
@@ -175,8 +246,31 @@ func (r *Run) SubmitAction(action Action) error {
 	if r.stepCount >= r.spec.MaxSteps {
 		return ErrMaxStepsExceeded
 	}
+	if !r.spec.Deadline.IsZero() && !time.Now().Before(r.spec.Deadline) {
+		r.status = RunExpired
+		r.hasPending = false
+		r.revision++
+		return ErrDeadlineExceeded
+	}
 	if err := validateAction(r.spec.RunID, r.stepCount+1, action); err != nil {
 		return err
+	}
+	if r.spec.MaxNoProgress > 0 {
+		fingerprint := actionFingerprint(action)
+		if fingerprint == r.lastProgress {
+			r.noProgress++
+		} else {
+			r.lastProgress = fingerprint
+			r.noProgress = 0
+		}
+		if r.noProgress >= r.spec.MaxNoProgress {
+			r.status = RunFailed
+			r.errorCode = string(FailureNoProgress)
+			r.failureKind = FailureNoProgress
+			r.hasPending = false
+			r.revision++
+			return ErrNoProgress
+		}
 	}
 
 	action.Arguments = cloneJSON(action.Arguments)
@@ -185,6 +279,7 @@ func (r *Run) SubmitAction(action Action) error {
 	r.pending = action
 	r.hasPending = true
 	r.status = actionWaitStatus(action.Type)
+	r.revision++
 	return nil
 }
 
@@ -194,6 +289,20 @@ func (r *Run) SubmitAction(action Action) error {
 func (r *Run) Observe(observation Observation) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.observeLocked(observation)
+}
+
+// ObserveCAS records an observation only if expectedRevision is current.
+func (r *Run) ObserveCAS(expectedRevision int64, observation Observation) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.requireRevisionLocked(expectedRevision); err != nil {
+		return err
+	}
+	return r.observeLocked(observation)
+}
+
+func (r *Run) observeLocked(observation Observation) error {
 	if r.status.terminal() {
 		return fmt.Errorf("%w: %s", ErrTerminalRun, r.status)
 	}
@@ -211,6 +320,7 @@ func (r *Run) Observe(observation Observation) error {
 	r.observations = append(r.observations, observation)
 	r.hasPending = false
 	r.status = RunRunning
+	r.revision++
 	return nil
 }
 
@@ -218,6 +328,20 @@ func (r *Run) Observe(observation Observation) error {
 func (r *Run) Complete() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.completeLocked()
+}
+
+// CompleteCAS completes a result only if expectedRevision is current.
+func (r *Run) CompleteCAS(expectedRevision int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.requireRevisionLocked(expectedRevision); err != nil {
+		return err
+	}
+	return r.completeLocked()
+}
+
+func (r *Run) completeLocked() error {
 	if r.status.terminal() {
 		return fmt.Errorf("%w: %s", ErrTerminalRun, r.status)
 	}
@@ -226,13 +350,22 @@ func (r *Run) Complete() error {
 	}
 	r.hasPending = false
 	r.status = RunCompleted
+	r.revision++
 	return nil
 }
 
 // Fail records a stable error code and terminates a non-terminal run.
 func (r *Run) Fail(errorCode string) error {
+	return r.FailWith(FailurePermanent, errorCode)
+}
+
+// FailWith records a classified terminal failure.
+func (r *Run) FailWith(kind FailureKind, errorCode string) error {
 	if errorCode == "" {
 		return fmt.Errorf("%w: failure requires an error code", ErrInvalidRun)
+	}
+	if !kind.valid() {
+		return fmt.Errorf("%w: unknown failure kind", ErrInvalidRun)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -240,8 +373,10 @@ func (r *Run) Fail(errorCode string) error {
 		return fmt.Errorf("%w: %s", ErrTerminalRun, r.status)
 	}
 	r.errorCode = errorCode
+	r.failureKind = kind
 	r.hasPending = false
 	r.status = RunFailed
+	r.revision++
 	return nil
 }
 
@@ -255,10 +390,19 @@ func (r *Run) Snapshot() RunSnapshot {
 		Status:       r.status,
 		CurrentNode:  r.currentNode,
 		StepCount:    r.stepCount,
+		Revision:     r.revision,
 		ErrorCode:    r.errorCode,
+		FailureKind:  r.failureKind,
 		Actions:      cloneActions(r.actions),
 		Observations: cloneObservations(r.observations),
 	}
+}
+
+func (r *Run) requireRevisionLocked(expected int64) error {
+	if expected != r.revision {
+		return fmt.Errorf("%w: expected %d, current %d", ErrRevisionConflict, expected, r.revision)
+	}
+	return nil
 }
 
 func validateAction(runID string, expectedStep int, action Action) error {
@@ -314,6 +458,25 @@ func (actionType ActionType) valid() bool {
 	default:
 		return false
 	}
+}
+
+func (kind FailureKind) valid() bool {
+	switch kind {
+	case FailureTransient, FailureTimeout, FailureValidation, FailureContext, FailureDependency, FailureConflict, FailurePolicy, FailureNoProgress, FailurePermanent:
+		return true
+	default:
+		return false
+	}
+}
+
+func actionFingerprint(action Action) string {
+	hash := sha256.New()
+	_, _ = hash.Write([]byte(action.Type))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write([]byte(action.TargetID))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write(action.Arguments)
+	return string(hash.Sum(nil))
 }
 
 func actionWaitStatus(actionType ActionType) RunStatus {

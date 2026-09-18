@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"gophermind/internal/agent/runtime"
 	"gophermind/internal/core/model"
 	"gophermind/internal/obs/metrics"
 	"gophermind/pkg/contracts/events"
@@ -15,16 +17,16 @@ import (
 
 // QueryService handles synchronous QA requests.
 type QueryService struct {
-	repo      SessionRepository
-	sessions  *SessionService
-	router    ModelRouter
-	rag       RAGClient
-	queue     QueueProducer
-	cache     SessionCache
-	memories  *MemoryService
-	traces    TraceReporter
-	evals     *EvalService
-	logger    *zap.Logger
+	repo     SessionRepository
+	sessions *SessionService
+	router   ModelRouter
+	rag      RAGClient
+	queue    QueueProducer
+	cache    SessionCache
+	memories *MemoryService
+	traces   TraceReporter
+	evals    *EvalService
+	logger   *zap.Logger
 }
 
 // NewQueryService builds QueryService.
@@ -59,6 +61,10 @@ func (s *QueryService) Query(ctx context.Context, in model.QueryInput) (model.Qu
 	if err != nil {
 		return model.QueryOutput{}, err
 	}
+	run, err := newQueryRuntime(ctx, requestID, in.UserID, sessionID)
+	if err != nil {
+		return model.QueryOutput{}, err
+	}
 
 	jobID := uuid.NewString()
 	if s.queue != nil {
@@ -82,10 +88,21 @@ func (s *QueryService) Query(ctx context.Context, in model.QueryInput) (model.Qu
 	answer := NoDataFallbackAnswer
 	usage := fallbackUsage()
 	if !(in.UseRAG && len(citations) == 0) {
+		if err := run.SubmitAction(ctx, runtime.Action{
+			ActionID:  requestID + ":model",
+			RunID:     requestID,
+			Step:      1,
+			Type:      runtime.ActionCallSkill,
+			TargetID:  modelType,
+			Arguments: mustJSON(map[string]string{"operation": "generate", "model": modelType}),
+		}); err != nil {
+			return model.QueryOutput{}, err
+		}
 		modelCtx, cancel := context.WithTimeout(ctx, modelRequestTimeout(modelType))
 		defer cancel()
 		answer, usage, err = s.router.GenerateWithFallback(modelCtx, modelType, prompt)
 		if err != nil {
+			_ = run.Run.FailWith(runtime.FailureTransient, "model_generate")
 			if s.queue != nil {
 				_ = s.queue.PublishResult(ctx, events.ResultMessage{
 					EventType:      "query.result",
@@ -103,9 +120,19 @@ func (s *QueryService) Query(ctx context.Context, in model.QueryInput) (model.Qu
 			}
 			return model.QueryOutput{}, err
 		}
+		if err := run.Observe(ctx, runtime.Observation{
+			ObservationID: requestID + ":model-output",
+			RunID:         requestID,
+			ActionID:      requestID + ":model",
+			Step:          1,
+			Output:        mustJSON(map[string]string{"answer": answer}),
+		}); err != nil {
+			return model.QueryOutput{}, err
+		}
 	}
 
 	if err := s.repo.AppendAssistantMessage(ctx, in.UserID, sessionID, answer, requestID, usage.Provider, modelType); err != nil {
+		_ = run.Run.FailWith(runtime.FailurePermanent, "append_assistant_message")
 		return model.QueryOutput{}, err
 	}
 	_ = s.sessions.UpdateShortTermMemory(ctx, in.UserID, sessionID)
@@ -148,6 +175,9 @@ func (s *QueryService) Query(ctx context.Context, in model.QueryInput) (model.Qu
 	if s.evals != nil {
 		s.evals.DispatchIfSampled(ctx, requestID, traceID, in.UserID, sessionID, in.Question, answer, modelType, citations)
 	}
+	if err := completeQueryRuntime(ctx, run, requestID, answer); err != nil {
+		return model.QueryOutput{}, err
+	}
 
 	success = true
 	return model.QueryOutput{
@@ -157,6 +187,48 @@ func (s *QueryService) Query(ctx context.Context, in model.QueryInput) (model.Qu
 		Citations: citations,
 		Usage:     usage,
 	}, nil
+}
+
+func newQueryRuntime(ctx context.Context, requestID string, userID string, sessionID string) (*runtime.Controller, error) {
+	run, err := runtime.NewRun(runtime.RunSpec{
+		RunID:           requestID,
+		Scope:           runtime.Metadata{UserID: userID, SessionID: sessionID, RunID: requestID, RequestID: requestID},
+		WorkflowID:      "single-agent-query",
+		WorkflowVersion: "v1",
+		MaxSteps:        4,
+		MaxNoProgress:   2,
+	})
+	if err != nil {
+		return nil, err
+	}
+	controller := &runtime.Controller{Run: run}
+	for _, status := range []runtime.RunStatus{runtime.RunLoadingContext, runtime.RunRouting, runtime.RunRunning} {
+		if err := controller.Transition(ctx, status); err != nil {
+			return nil, err
+		}
+	}
+	return controller, nil
+}
+
+func completeQueryRuntime(ctx context.Context, run *runtime.Controller, requestID string, answer string) error {
+	if err := run.SubmitAction(ctx, runtime.Action{
+		ActionID:  requestID + ":result",
+		RunID:     requestID,
+		Step:      run.Run.Snapshot().StepCount + 1,
+		Type:      runtime.ActionReturnResult,
+		Arguments: mustJSON(map[string]string{"answer": answer}),
+	}); err != nil {
+		return err
+	}
+	return run.Complete(ctx)
+}
+
+func mustJSON(value any) json.RawMessage {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return encoded
 }
 
 func (s *QueryService) ensureSessionAndUserMessage(ctx context.Context, in model.QueryInput, requestID string) (string, error) {
