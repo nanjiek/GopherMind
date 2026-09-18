@@ -4,7 +4,7 @@ Updated: 2026-09-18T09:22:31+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p1-step1-postgres-foundation`
-Base HEAD before the P1 node commit: `105b44c521c1aa6b423d085e2f378e162289fa54`
+P1 node 1 code commit: `eba5a534b42cd4854a9a0816ab1b26b09f564ab6`
 
 ## Objective
 
@@ -22,7 +22,7 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
 - Original V3 architecture and implementation plans are in `docs/ai-architecture-v3.zh.md` and `docs/ai-upgrade-plan-v3.zh.md`.
 - P0 build baseline, architecture decisions, Gold Set, smoke matrix, and P1 design are complete through PRs #4, #5, and #6.
 - PR #6 is merged into `codex/p0-step2-decisions`; its merge commit is `105b44c521c1aa6b423d085e2f378e162289fa54`.
-- P1 node 1 implementation is ready in the current changeset:
+- P1 node 1 is implemented:
   - runtime repositories, configuration, both entrypoints, compose, dependencies, and docs use PostgreSQL only;
   - startup no longer runs GORM AutoMigrate;
   - `cmd/migrate` applies embedded versioned SQL to an empty schema and refuses unknown non-empty schemas;
@@ -30,10 +30,11 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
   - the initial schema includes existing business tables plus Event Log, projection, outbox, and reserved agent tables;
   - PostgreSQL integration tests cover repeatable initialization, unknown-schema rejection, incomplete-schema rejection, transactions, uniqueness, and ownership scope;
   - CI now starts PostgreSQL and runs the integration tests.
+- P1 node 1 is committed and pushed in `eba5a53`; PR #7 is open: `codex/p1-step1-postgres-foundation` → `codex/p0-step2-decisions`.
 
 ## Current state
 
-- Working tree: P1 node 1 changes are ready to commit; no unrelated changes were observed.
+- Working tree: clean before this checkpoint metadata update.
 - Current branch is based on the merged P0 state in `origin/codex/p0-step2-decisions`.
 - PR #3 remains open as a draft in the older stack; PRs #4, #5, and #6 are merged.
 - Docker Desktop recovered after a transient Ubuntu WSL integration failure.
@@ -51,11 +52,10 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
 
 ## Next actions
 
-1. Commit and push P1 node 1, create its PR against `codex/p0-step2-decisions`, then record the commit and PR here.
-2. Start `codex/p1-step2-event-surface` from the node 1 branch.
-3. Implement typed Event Log append/read with transactionally coupled session/message writes, stream sequence, stable idempotency replay, and ownership enforcement.
-4. Add Projection/Surface types and Redis versioned cache; prove cache deletion rebuilds the same recent-message Surface from PostgreSQL.
-5. Cover concurrent append, response-loss retry, replay, scope rejection, and cache recovery against real PostgreSQL/Redis; then commit, push, and create the next PR.
+1. Start `codex/p1-step2-event-surface` from the node 1 branch.
+2. Implement typed Event Log append/read with transactionally coupled session/message writes, stream sequence, stable idempotency replay, and ownership enforcement.
+3. Add Projection/Surface types and Redis versioned cache; prove cache deletion rebuilds the same recent-message Surface from PostgreSQL.
+4. Cover concurrent append, response-loss retry, replay, scope rejection, and cache recovery against real PostgreSQL/Redis; then commit, push, and create the next PR.
 
 ## Blockers and risks
 
