@@ -1,6 +1,6 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T11:22:00+08:00
+Updated: 2026-09-18T11:24:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p3-step1-gateway-routing`
@@ -61,13 +61,13 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 
 ## Current state
 
-- Working tree: expected clean after this checkpoint update is committed; P3 Step 1 code is ahead of `origin/codex/p1-step2-event-surface`.
+- Working tree: clean after P3 Step 1 commits were pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
 - PR #11 is merged: `codex/p2-step3-run-state-machine` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/11.
 - PR #12 is merged: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
-- P3 Step 1 has no PR yet; it must use `codex/p1-step2-event-surface` as its base.
+- PR #13 is open: `codex/p3-step1-gateway-routing` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/13.
 
 ## Validation
 
@@ -90,7 +90,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 
 ## Next actions
 
-1. Commit this refreshed checkpoint, push `codex/p3-step1-gateway-routing`, and create its PR against `codex/p1-step2-event-surface`.
+1. Have PR #13 reviewed and merged without widening its scope.
 2. After merge, choose one separate P3 node: Capability policy or a constrained Skill/MCP execution path. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
