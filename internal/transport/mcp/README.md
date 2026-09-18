@@ -9,7 +9,7 @@
 
 ## 2. 启动前提
 `cmd/mcp-server` 会复用后端服务装配，因此依赖以下组件可用：
-- MySQL
+- Postgres
 - Redis
 - RAG Python 服务（用于 `use_rag=true` 场景）
 

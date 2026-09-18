@@ -1,4 +1,4 @@
-package mysql
+package postgres
 
 import (
 	"context"
@@ -64,6 +64,17 @@ func (r *SessionRepository) CreateSessionWithFirstMessage(ctx context.Context, u
 // AppendUserMessage 追加用户消息并更新会话时间。
 func (r *SessionRepository) AppendUserMessage(ctx context.Context, userID string, sessionID string, question string, requestID string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		result := tx.Model(&SessionModel{}).
+			Where("id = ? AND user_id = ?", sessionID, userID).
+			Update("last_message_at", now)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
 		msg := MessageModel{
 			SessionID: sessionID,
 			UserID:    userID,
@@ -74,18 +85,24 @@ func (r *SessionRepository) AppendUserMessage(ctx context.Context, userID string
 		if err := tx.Create(&msg).Error; err != nil {
 			return err
 		}
-		now := time.Now()
-		return tx.Model(&SessionModel{}).
-			Where("id = ? AND user_id = ?", sessionID, userID).
-			Updates(map[string]any{
-				"last_message_at": now,
-			}).Error
+		return nil
 	})
 }
 
 // AppendAssistantMessage 追加 AI 回复并更新会话时间。
 func (r *SessionRepository) AppendAssistantMessage(ctx context.Context, userID string, sessionID string, answer string, requestID string, provider string, modelName string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		result := tx.Model(&SessionModel{}).
+			Where("id = ? AND user_id = ?", sessionID, userID).
+			Update("last_message_at", now)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
 		msg := MessageModel{
 			SessionID: sessionID,
 			UserID:    userID,
@@ -98,13 +115,7 @@ func (r *SessionRepository) AppendAssistantMessage(ctx context.Context, userID s
 		if err := tx.Create(&msg).Error; err != nil {
 			return err
 		}
-
-		now := time.Now()
-		return tx.Model(&SessionModel{}).
-			Where("id = ? AND user_id = ?", sessionID, userID).
-			Updates(map[string]any{
-				"last_message_at": now,
-			}).Error
+		return nil
 	})
 }
 

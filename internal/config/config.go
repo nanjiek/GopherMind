@@ -12,7 +12,7 @@ type Config struct {
 	ServiceName string
 	HTTP        HTTPConfig
 	MCP         MCPConfig
-	MySQL       MySQLConfig
+	Postgres    PostgresConfig
 	Redis       RedisConfig
 	RabbitMQ    RabbitMQConfig
 	RocketMQ    RocketMQConfig
@@ -38,7 +38,7 @@ type MCPConfig struct {
 	DefaultUserID string
 }
 
-type MySQLConfig struct {
+type PostgresConfig struct {
 	DSN             string
 	MaxOpenConns    int
 	MaxIdleConns    int
@@ -68,13 +68,13 @@ type RabbitMQConfig struct {
 }
 
 type RocketMQConfig struct {
-	Enabled         bool
-	NameServers     []string
-	ProducerGroup   string
-	ConsumerGroup   string
-	TopicDocIngest  string
-	TopicMCPRemote  string
-	TopicEvalJudge  string
+	Enabled        bool
+	NameServers    []string
+	ProducerGroup  string
+	ConsumerGroup  string
+	TopicDocIngest string
+	TopicMCPRemote string
+	TopicEvalJudge string
 }
 
 type AuthConfig struct {
@@ -117,14 +117,14 @@ type RAGConfig struct {
 }
 
 type PineconeConfig struct {
-	APIKey           string
-	DenseHost        string
-	SparseHost       string
-	MemoryHost       string
-	DocumentTopK     int
-	MemoryTopK       int
-	Namespace        string
-	MemoryNamespace  string
+	APIKey          string
+	DenseHost       string
+	SparseHost      string
+	MemoryHost      string
+	DocumentTopK    int
+	MemoryTopK      int
+	Namespace       string
+	MemoryNamespace string
 }
 
 type LangfuseConfig struct {
@@ -156,11 +156,11 @@ func Load() Config {
 			Transport:     getEnv("MCP_TRANSPORT", "stdio"),
 			DefaultUserID: getEnv("MCP_DEFAULT_USER_ID", "mcp-user"),
 		},
-		MySQL: MySQLConfig{
-			DSN:             getEnv("MYSQL_DSN", "root:password@tcp(mysql:3306)/gophermind?charset=utf8mb4&parseTime=True&loc=Local"),
-			MaxOpenConns:    getInt("MYSQL_MAX_OPEN_CONNS", 20),
-			MaxIdleConns:    getInt("MYSQL_MAX_IDLE_CONNS", 10),
-			ConnMaxLifetime: getDuration("MYSQL_CONN_MAX_LIFETIME", 30*time.Minute),
+		Postgres: PostgresConfig{
+			DSN:             getEnv("POSTGRES_DSN", "postgres://gophermind:gophermind@localhost:5432/gophermind?sslmode=disable"),
+			MaxOpenConns:    getInt("POSTGRES_MAX_OPEN_CONNS", 20),
+			MaxIdleConns:    getInt("POSTGRES_MAX_IDLE_CONNS", 10),
+			ConnMaxLifetime: getDuration("POSTGRES_CONN_MAX_LIFETIME", 30*time.Minute),
 		},
 		Redis: RedisConfig{
 			Addrs:        getStringSlice("REDIS_ADDRS", []string{"redis:6379"}),

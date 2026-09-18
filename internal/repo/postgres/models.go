@@ -1,4 +1,4 @@
-package mysql
+package postgres
 
 import "time"
 
@@ -20,7 +20,7 @@ type MessageModel struct {
 	SessionID string    `gorm:"type:char(36);index:idx_messages_session_time,priority:1;not null"`
 	UserID    string    `gorm:"size:64;not null"`
 	Role      string    `gorm:"size:16;not null"`
-	Content   string    `gorm:"type:mediumtext;not null"`
+	Content   string    `gorm:"type:text;not null"`
 	RequestID string    `gorm:"size:36;index"`
 	Provider  string    `gorm:"size:64"`
 	ModelName string    `gorm:"size:64"`
@@ -39,28 +39,28 @@ type UserModel struct {
 
 // RefreshTokenModel 对应 refresh_tokens 表，保存刷新令牌哈希。
 type RefreshTokenModel struct {
-	ID          uint64     `gorm:"primaryKey;autoIncrement"`
-	UserID      uint64     `gorm:"index;not null"`
-	TokenJTI    string     `gorm:"size:64;uniqueIndex;not null"`
-	TokenHash   string     `gorm:"size:128;not null"`
-	DeviceID    string     `gorm:"size:128"`
-	ExpiresAt   time.Time  `gorm:"index;not null"`
-	RevokedAt   *time.Time `gorm:"index"`
-	CreatedAt   time.Time  `gorm:"autoCreateTime"`
-	UpdatedAt   time.Time  `gorm:"autoUpdateTime"`
+	ID        uint64     `gorm:"primaryKey;autoIncrement"`
+	UserID    uint64     `gorm:"index;not null"`
+	TokenJTI  string     `gorm:"size:64;uniqueIndex;not null"`
+	TokenHash string     `gorm:"size:128;not null"`
+	DeviceID  string     `gorm:"size:128"`
+	ExpiresAt time.Time  `gorm:"index;not null"`
+	RevokedAt *time.Time `gorm:"index"`
+	CreatedAt time.Time  `gorm:"autoCreateTime"`
+	UpdatedAt time.Time  `gorm:"autoUpdateTime"`
 }
 
 // ConsumerInboxModel 对应 consumer_inbox 表，保证消息消费幂等落库。
 type ConsumerInboxModel struct {
-	ID         uint64     `gorm:"primaryKey;autoIncrement"`
-	Consumer   string     `gorm:"size:64;not null;uniqueIndex:uk_consumer_message,priority:1"`
-	MessageID  string     `gorm:"size:128;not null;uniqueIndex:uk_consumer_message,priority:2"`
-	Status     string     `gorm:"size:32;not null;index"`
-	RetryCount int        `gorm:"not null;default:0"`
-	LastError  string     `gorm:"size:1024"`
+	ID          uint64     `gorm:"primaryKey;autoIncrement"`
+	Consumer    string     `gorm:"size:64;not null;uniqueIndex:uk_consumer_message,priority:1"`
+	MessageID   string     `gorm:"size:128;not null;uniqueIndex:uk_consumer_message,priority:2"`
+	Status      string     `gorm:"size:32;not null;index"`
+	RetryCount  int        `gorm:"not null;default:0"`
+	LastError   string     `gorm:"size:1024"`
 	ProcessedAt *time.Time `gorm:"index"`
-	CreatedAt  time.Time  `gorm:"autoCreateTime"`
-	UpdatedAt  time.Time  `gorm:"autoUpdateTime"`
+	CreatedAt   time.Time  `gorm:"autoCreateTime"`
+	UpdatedAt   time.Time  `gorm:"autoUpdateTime"`
 }
 
 // DocumentModel stores document upload and indexing lifecycle.
@@ -99,7 +99,7 @@ type MCPJobModel struct {
 	ToolName     string    `gorm:"size:128;not null"`
 	Status       string    `gorm:"size:32;index;not null"`
 	ResumeToken  string    `gorm:"size:64;uniqueIndex;not null"`
-	Output       string    `gorm:"type:mediumtext"`
+	Output       string    `gorm:"type:text"`
 	ErrorMessage string    `gorm:"size:1024"`
 	CreatedAt    time.Time `gorm:"autoCreateTime"`
 	UpdatedAt    time.Time `gorm:"autoUpdateTime"`
@@ -116,3 +116,21 @@ type MemoryCatalogModel struct {
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 }
+
+func (SessionModel) TableName() string { return "sessions" }
+
+func (MessageModel) TableName() string { return "messages" }
+
+func (UserModel) TableName() string { return "users" }
+
+func (RefreshTokenModel) TableName() string { return "refresh_tokens" }
+
+func (ConsumerInboxModel) TableName() string { return "consumer_inbox" }
+
+func (DocumentModel) TableName() string { return "documents" }
+
+func (EvalRunModel) TableName() string { return "eval_runs" }
+
+func (MCPJobModel) TableName() string { return "mcp_jobs" }
+
+func (MemoryCatalogModel) TableName() string { return "memory_records" }

@@ -20,7 +20,7 @@ import (
 	otelpkg "gophermind/internal/obs/otel"
 	"gophermind/internal/queue/rabbitmq"
 	ragclient "gophermind/internal/rag/client"
-	mysqlrepo "gophermind/internal/repo/mysql"
+	postgresrepo "gophermind/internal/repo/postgres"
 	redisrepo "gophermind/internal/repo/redis"
 	"gophermind/internal/security/secret"
 	"gophermind/internal/security/token"
@@ -57,13 +57,13 @@ func main() {
 	}()
 	metricspkg.RegisterAll()
 
-	db, err := mysqlrepo.NewDB(cfg.MySQL)
+	db, err := postgresrepo.NewDB(cfg.Postgres)
 	if err != nil {
-		logg.Fatal("init mysql failed", zap.Error(err))
+		logg.Fatal("init postgres failed", zap.Error(err))
 	}
-	sessionRepo := mysqlrepo.NewSessionRepository(db)
-	authRepo := mysqlrepo.NewAuthRepository(db)
-	inboxRepo := mysqlrepo.NewInboxRepository(db)
+	sessionRepo := postgresrepo.NewSessionRepository(db)
+	authRepo := postgresrepo.NewAuthRepository(db)
+	inboxRepo := postgresrepo.NewInboxRepository(db)
 
 	cache := redisrepo.NewSessionCache(cfg.Redis, logg)
 	var producer rabbitmq.Producer
