@@ -1,14 +1,15 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T09:22:31+08:00
+Updated: 2026-09-18T09:40:07+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p1-step1-postgres-foundation`
+Branch: `codex/p1-step2-event-surface`
 P1 node 1 code commit: `eba5a534b42cd4854a9a0816ab1b26b09f564ab6`
+P1 node 2 code commit: `fbad478ef9b0d647241073d1f3844e04b95c2b2c`
 
 ## Objective
 
-Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. P1 is in progress: PostgreSQL is the only relational database, followed by the Event Log/Projection/Surface loop and Redis recovery proof.
+Upgrade GopherMind according to the saved V3 architecture plan. P0 and the core P1 PostgreSQL/Event/Projection/Surface work are complete. The next phase is P2: the minimal Agent Runtime.
 
 ## User decisions and standing constraints
 
@@ -31,18 +32,33 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
   - PostgreSQL integration tests cover repeatable initialization, unknown-schema rejection, incomplete-schema rejection, transactions, uniqueness, and ownership scope;
   - CI now starts PostgreSQL and runs the integration tests.
 - P1 node 1 is committed and pushed in `eba5a53`; PR #7 is open: `codex/p1-step1-postgres-foundation` → `codex/p0-step2-decisions`.
+- P1 node 2 is implemented:
+  - typed Event Log and stable P1 event names;
+  - session/message facts and Events commit in the same transaction;
+  - tenant-scoped idempotent replay and continuous per-session sequence under concurrency;
+  - scope checks for user and patient reads/appends;
+  - persistent Projection checkpoint store;
+  - versioned Redis Surface with event waterline validation and PostgreSQL rebuild;
+  - real PostgreSQL/Redis tests for replay, concurrency, projection restart, stale cache refresh, and cache deletion recovery.
+- The core P1 acceptance in `docs/design/p1-event-contract.zh.md` is satisfied. Remaining smoke-matrix items belong to later RAG, LangGraph, and mailbox phases.
+- P1 node 2 is committed and pushed in `fbad478`; PR #8 is open: `codex/p1-step2-event-surface` → `codex/p1-step1-postgres-foundation`.
 
 ## Current state
 
 - Working tree: clean before this checkpoint metadata update.
-- Current branch is based on the merged P0 state in `origin/codex/p0-step2-decisions`.
+- Current branch is based on P1 node 1 commit `d7b22706bf2163b5459d1c47d3d53e036b76c222`.
 - PR #3 remains open as a draft in the older stack; PRs #4, #5, and #6 are merged.
+- PR #7 is open and mergeable.
+- PR #8 is open and mergeable; no commit status contexts were reported when last checked.
 - Docker Desktop recovered after a transient Ubuntu WSL integration failure.
-- A disposable local PostgreSQL 16 container named `gophermind-p1-postgres` is running on `127.0.0.1:55432` for P1 integration tests.
+- Disposable PostgreSQL and Redis test containers were stopped and removed after validation.
 
 ## Validation
 
 - `GOTOOLCHAIN=go1.23.12 POSTGRES_TEST_DSN=... go test ./...` — passed against real PostgreSQL 16.
+- `REDIS_TEST_ADDR=... go test ./test/integration` — passed against real Redis 7.2; deleted Surface rebuilt with identical messages and source seq.
+- Concurrent same-session append test passed five consecutive runs; sequence remained continuous and same-key writes were idempotent.
+- Projection checkpoint reopen test passed.
 - `GOTOOLCHAIN=go1.23.12 go build ./cmd/...` — passed, including `cmd/migrate`.
 - `GOTOOLCHAIN=go1.23.12 go vet ./...` — passed.
 - `go run ./cmd/migrate` twice against the disposable PostgreSQL database — passed; the second run reported no drift.
@@ -52,23 +68,26 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
 
 ## Next actions
 
-1. Start `codex/p1-step2-event-surface` from the node 1 branch.
-2. Implement typed Event Log append/read with transactionally coupled session/message writes, stream sequence, stable idempotency replay, and ownership enforcement.
-3. Add Projection/Surface types and Redis versioned cache; prove cache deletion rebuilds the same recent-message Surface from PostgreSQL.
-4. Cover concurrent append, response-loss retry, replay, scope rejection, and cache recovery against real PostgreSQL/Redis; then commit, push, and create the next PR.
+1. Re-check PR #8 mergeability and CI before the next node.
+2. Begin P2 on a new stacked branch: implement Scope, resource lifecycle/disposers, cancellation, bounded concurrency, and the minimal Run/Action/Observation state machine before wrapping the current single-agent query path.
 
 ## Blockers and risks
 
 - The PR history is still stacked on intermediate branches rather than integrated into `develop`.
-- P1 node 1 creates Event Log tables but does not write events yet; node 2 must complete the functional loop.
 - Docker Desktop's WSL integration failed once during image startup and recovered after restart; re-check it before real-dependency tests.
-- LangGraph PostgreSQL recovery and Qdrant/RAG degradation remain later P1/P4 and P1/P6 work.
+- LangGraph PostgreSQL recovery and Qdrant/RAG degradation remain later P4 and P6 work.
 
 ## Important files
 
 - `internal/repo/postgres/migrations/000001_initial.up.sql` — authoritative initial PostgreSQL schema.
 - `internal/repo/postgres/migrate.go` — migration runner and schema verifier.
 - `internal/repo/postgres/*_integration_test.go` — real PostgreSQL coverage.
+- `internal/session/eventlog/event.go` — Event contract and P1 event type registry.
+- `internal/session/surface/surface.go` — versioned Surface key and freshness rules.
+- `internal/repo/postgres/event_store.go` — PostgreSQL append/read and idempotent replay.
+- `internal/repo/postgres/projection_store.go` — durable projection checkpoint.
+- `test/integration/surface_recovery_test.go` — real PostgreSQL/Redis recovery proof.
+- `docs/p1-step2-event-surface.zh.md` — node scope, validation, and rollback.
 - `cmd/migrate/main.go` — explicit migration entrypoint.
 - `docs/design/p1-event-contract.zh.md` — Event/Projection/Surface contract and P1 acceptance.
 - `docs/p0-smoke-matrix.zh.md` — remaining real-dependency checks.

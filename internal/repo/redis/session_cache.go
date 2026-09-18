@@ -15,6 +15,7 @@ import (
 
 	"gophermind/internal/config"
 	"gophermind/internal/core/model"
+	"gophermind/internal/session/surface"
 )
 
 type fallbackItem struct {
@@ -24,7 +25,7 @@ type fallbackItem struct {
 
 // SessionCache 实现 Redis + 内存退化缓存。
 type SessionCache struct {
-	client *redis.ClusterClient
+	client redis.UniversalClient
 	logger *zap.Logger
 
 	degraded atomic.Bool
@@ -60,6 +61,69 @@ func (c *SessionCache) windowKey(userID string, sessionID string) string {
 
 func (c *SessionCache) idempotencyKey(consumer string, messageID string) string {
 	return fmt.Sprintf("idempotency:%s:%s", consumer, messageID)
+}
+
+func (c *SessionCache) GetSurface(ctx context.Context, key surface.Key) (surface.Surface, bool, error) {
+	cacheKey := key.RedisKey()
+	if !c.degraded.Load() {
+		raw, err := c.client.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var item surface.Surface
+			if err := json.Unmarshal([]byte(raw), &item); err != nil {
+				return surface.Surface{}, false, err
+			}
+			return item, true, nil
+		}
+		if !errors.Is(err, redis.Nil) {
+			c.MarkDegraded(err)
+		}
+	}
+	raw, ok, err := c.readFallback(cacheKey)
+	if err != nil || !ok {
+		return surface.Surface{}, false, err
+	}
+	var item surface.Surface
+	if err := json.Unmarshal([]byte(raw), &item); err != nil {
+		return surface.Surface{}, false, err
+	}
+	return item, true, nil
+}
+
+func (c *SessionCache) PutSurface(ctx context.Context, item surface.Surface, ttl time.Duration) error {
+	item.ExpiresAt = time.Now().Add(ttl)
+	raw, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	cacheKey := item.Key.RedisKey()
+	c.writeFallback(cacheKey, string(raw), ttl)
+	if c.degraded.Load() {
+		return nil
+	}
+	if err := c.client.Set(ctx, cacheKey, raw, ttl).Err(); err != nil {
+		c.MarkDegraded(err)
+		return err
+	}
+	return nil
+}
+
+func (c *SessionCache) InvalidateSurface(ctx context.Context, key surface.Key) error {
+	cacheKey := key.RedisKey()
+	c.mu.Lock()
+	delete(c.memKV, cacheKey)
+	c.mu.Unlock()
+	if c.degraded.Load() {
+		return nil
+	}
+	if err := c.client.Del(ctx, cacheKey).Err(); err != nil {
+		c.MarkDegraded(err)
+		return err
+	}
+	return nil
+}
+
+func (c *SessionCache) Close() error {
+	return c.client.Close()
 }
 
 // GetSummary 获取会话摘要，优先读 Redis，失败回退内存。
