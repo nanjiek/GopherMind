@@ -1,18 +1,19 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T22:40:18+08:00
+Updated: 2026-09-18T22:50:27+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p4-step2-fixed-workflow-runner`
+Branch: `codex/p4-step3-workflow-checkpoint`
 Tool/Skill executor implementation commit: `ff1c4b9eec112313514fc213dc9431a78bc92389`
 HTTP executor implementation commit: `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`
 MCP Gateway implementation commit: `bd8ffad1b1116e4ec7105a110e9d81de6ae6cda0`
 P4 fixed workflow implementation commit: `1ebfa7fd0a6760edbd0e9dec76b2ad64a113754c`
 P4 fixed workflow runner implementation commit: `38d6e0c880ac390bbc6546bdfb36f4e932b89b64`
+P4 workflow checkpoint implementation commit: `bbea5dfa4b5491db55fa912f4ed2e88ae8cb3c61`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P4 Steps 1–2 provide the fixed in-memory Intake → risk routing → Evidence → Safety → Response graph and its Run lifecycle protocol; durable recovery and multi-agent work remain later P4 nodes.
+Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P4 Steps 1–3 provide the fixed graph, its in-memory Run lifecycle, and a PostgreSQL checkpoint authority; recovery execution and multi-agent work remain later P4 nodes.
 
 ## User decisions and standing constraints
 
@@ -26,6 +27,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P3 Step 5 adapts only pre-connected, registered MCP peers with fixed remote tool names. Authorization must run immediately before both `Ping` and `CallTool`. Do not create connections, enumerate remote tools, inject credentials, add persistence, budgets, audit, retries, circuit breaking, async Task/Mailbox, providers, or schema changes.
 - P4 Step 1 is limited to the fixed Intake → risk routing → Evidence → Safety → Response in-process graph. Do not implement durable Task DAG/Mailbox, dynamic multi-agent delegation, connection recovery, PostgreSQL state persistence, or queue semantics.
 - P4 Step 2 is limited to the in-memory protocol that transitions a Run through the closed P4 Step 1 graph and commits its response as one `return_result`. Do not add retries, recovery, persistence, publication, Queue/Task/Mailbox semantics, QueryService/StreamService integration, or dynamic delegation.
+- P4 Step 3 is limited to scope-bound PostgreSQL checkpoint state and revision CAS. Do not claim LangGraph integration, connect checkpointing to execution/recovery, or add Task DAG/Mailbox, lease, fencing token, queue, retry, dynamic delegation, or external side effects.
 - Any future P4 node with an external side effect must use the existing executor boundary and re-authorize Capability immediately before that effect.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
@@ -109,10 +111,16 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
   - After Run creation, lifecycle, node, or completion errors are recorded as a stable classified terminal failure before the original error is returned. Context cancellation and deadline expiry map to context and timeout failures; no retry occurs.
   - Focused tests cover success, single result action, node failure, cancellation, deadline, Hook visibility, and invalid runner/spec rejection.
 - No durable Task DAG/Mailbox, dynamic delegation, connection recovery, PostgreSQL persistence, migration, queue semantics, response publication, model/Tool/Skill/HTTP/MCP execution, or schema behavior changed in P4 Step 2.
+- P4 Step 3 workflow checkpoint authority is committed in `bbea5dfa4b5491db55fa912f4ed2e88ae8cb3c61`:
+  - `runtime.Checkpoint` validates trusted tenant/user/patient/session scope, workflow identity, lifecycle status, revision, failure information, and bounded JSON-object state; hidden model reasoning and large tool results are excluded by contract.
+  - PostgreSQL migration 2 extends the unused `agent_runs` canonical row and adds immutable `agent_run_checkpoints` history.
+  - `WorkflowCheckpointStore` creates revision 1, reads only within exact trusted scope, and advances current state plus history atomically through revision CAS; stale writers are rejected.
+  - Focused runtime tests cover checkpoint validation, bounds, and defensive copies. PostgreSQL migration/store integration tests are present but skipped locally because `POSTGRES_TEST_DSN` is unset.
+- No LangGraph runtime claim, automatic recovery, Task DAG/Mailbox, lease, fencing token, queue semantics, dynamic delegation, model/Tool/Skill/HTTP/MCP execution, old-MySQL migration, dual write, CDC, backfill, or schema behavior outside migration 2 changed in P4 Step 3.
 
 ## Current state
 
-- Working tree: clean after the PR checkpoint update is committed and pushed.
+- Working tree: clean after the P4 Step 3 implementation commit; this checkpoint update is the only pending tracked change until committed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -124,7 +132,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #16 is merged: `codex/p3-step4-http-executor` -> `codex/p1-step2-event-surface` at `5dd3841a80269a236df4667657db674bc6cc6fb0`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/16.
 - PR #17 is merged: `codex/p3-step5-mcp-gateway` -> `codex/p1-step2-event-surface` at `2eb8b49ef60907d45d8e1fba254fd69e74627758`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/17. P3 is complete.
 - PR #18 is merged: `codex/p4-step1-fixed-workflow-graph` -> `codex/p1-step2-event-surface` at `c53d9e25b2cc04b3886bd40a9371ee121c9ffd39`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/18.
-- PR #19 is open: `codex/p4-step2-fixed-workflow-runner` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/19.
+- PR #19 is merged: `codex/p4-step2-fixed-workflow-runner` -> `codex/p1-step2-event-surface` at `c336f3f8010effe7e6e55b70ef6800d450c0d409`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/19.
+- P4 Step 3 branch: `codex/p4-step3-workflow-checkpoint` -> `codex/p1-step2-event-surface`; PR creation is the next authorized action.
 
 ## Validation
 
@@ -168,18 +177,25 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - `go build ./cmd/...` — passed after P4 Step 2.
 - `go vet ./...` — passed after P4 Step 2.
 - `git diff --check` — passed after P4 Step 2.
+- `go test ./internal/agent/runtime ./internal/repo/postgres` — passed after P4 Step 3.
+- `go test ./...` — passed after P4 Step 3.
+- `go build ./cmd/...` — passed after P4 Step 3.
+- `go vet ./...` — passed after P4 Step 3.
+- `git diff --check` — passed after P4 Step 3.
+- `go test ./internal/repo/postgres -run 'Test(MigrationsInitializeEmptySchemaAndAreRepeatable|WorkflowCheckpointStoreCreatesLoadsAndUsesCAS)$' -count=1 -v` — passed with both PostgreSQL integration tests skipped because `POSTGRES_TEST_DSN` is unset.
 - `git diff --check` — passed before the lifecycle commit.
 - `go test -race ./internal/agent/runtime` — not runnable in this workstation environment: Go reports `-race requires cgo; enable cgo by setting CGO_ENABLED=1`; `go env` reports `CGO_ENABLED=0` and no `gcc`, `clang`, or `cl` executable is installed. No toolchain installation was attempted because it is outside this node's scope.
 
 ## Next actions
 
-1. Review and merge PR #19 after its required GitHub checks pass.
-2. Select P4 Step 3 as a separate reviewable contract. Durable Task DAG/Mailbox, dynamic multi-agent delegation, connection recovery, PostgreSQL state persistence, and queue semantics all remain deferred.
+1. Push `codex/p4-step3-workflow-checkpoint` and create its PR with base `codex/p1-step2-event-surface`; then record the PR URL and state in this checkpoint.
+2. Select P4 Step 4 as a separate reviewable contract. The next likely concern is binding checkpoint CAS to explicit recovery execution; Task DAG/Mailbox, lease/fencing, and dynamic multi-agent delegation remain separately reviewable.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
 
 - The required race test is blocked locally by the missing C toolchain; all non-race requested validation passed.
+- PostgreSQL integration coverage is blocked locally by absent `POSTGRES_TEST_DSN`; the migration/store tests exist and skip rather than simulate PostgreSQL behavior.
 - P1 remains merged through intermediate stack branches rather than consolidated into `develop`.
 
 ## Important files
@@ -206,6 +222,10 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - `docs/p4-step1-fixed-workflow-graph.zh.md` — P4 Step 1 scope, exclusions, and acceptance.
 - `internal/agent/runtime/fixed_workflow_runner.go` — in-memory fixed graph Run lifecycle, failure classification, and final result action.
 - `docs/p4-step2-fixed-workflow-runner.zh.md` — P4 Step 2 scope, exclusions, and acceptance.
+- `internal/agent/runtime/checkpoint.go` — durable checkpoint contract, validation, scope requirements, and store interface.
+- `internal/repo/postgres/checkpoint_store.go` — PostgreSQL checkpoint authority, exact scope reads, and revision-CAS writes.
+- `internal/repo/postgres/migrations/000002_workflow_checkpoints.up.sql` — migration 2 canonical checkpoint and immutable history schema.
+- `docs/p4-step3-workflow-checkpoint.zh.md` — P4 Step 3 scope, exclusions, and acceptance.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
