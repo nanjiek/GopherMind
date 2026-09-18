@@ -1,14 +1,14 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T11:24:00+08:00
+Updated: 2026-09-18T11:33:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p3-step1-gateway-routing`
-Gateway routing implementation commit: `508ded0659b9f53bb11abebd175a0c5465f080bb`
+Branch: `codex/p3-step2-capability-policy`
+Capability policy implementation commit: `8fc1c181ed6db2e29f6fb2e20161581e2312cd0a`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. P3 Step 1 establishes the Gateway model/workflow routing contract; capability governance and execution remain later P3 nodes.
+Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. P3 Steps 1–2 establish Gateway routing and Capability policy; constrained Skill/MCP execution remains later P3 work.
 
 ## User decisions and standing constraints
 
@@ -16,6 +16,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - Complete one reviewable node at a time; each completed node updates this checkpoint, is committed, pushed, and submitted as a GitHub PR.
 - P2 completed only in-process revision/CAS, failure/progress controls, Hook Pipeline, and a minimal synchronous QueryService wrapper. PostgreSQL Run persistence, Event Log writes, and streaming integration remain explicitly deferred.
 - P3 Step 1 is limited to trusted risk/task routing. Do not connect HTTP, QueryService, StreamService, Provider execution, Capability policy, Skill/Tool/MCP execution, budgets, or persistence in this node.
+- P3 Step 2 is limited to static Capability policy. Do not execute Tool/Skill/MCP, connect HTTP/providers, or add budgets, audit persistence, or schema changes.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
 ## Completed
@@ -58,16 +59,23 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
   - invalid requests and model-route configuration are rejected;
   - tests cover low/high/red-flag routes, version defaults, and invalid input.
 - No external behavior, model call, schema, capability, or execution path changed in P3 Step 1.
+- PR #13 merged into `codex/p1-step2-event-surface` at `ec01c14f33efeb1d684fdfdec6904a0a9167cdd4`; GitHub `go` and `frontend` checks passed before merge.
+- P3 Step 2 Capability policy is committed in `8fc1c181ed6db2e29f6fb2e20161581e2312cd0a`:
+  - immutable explicit Agent/Capability grants default-deny unregistered access;
+  - patient-bound grants require trusted tenant, user, and patient scope;
+  - policy tests cover explicit allow, default deny, patient scope, and duplicate grant rejection.
+- No Tool/Skill/MCP execution, HTTP/provider integration, budget, audit, persistence, or schema behavior changed in P3 Step 2.
 
 ## Current state
 
-- Working tree: clean after P3 Step 1 commits were pushed.
+- Working tree: clean after P3 Step 2 commits were pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
 - PR #11 is merged: `codex/p2-step3-run-state-machine` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/11.
 - PR #12 is merged: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
-- PR #13 is open: `codex/p3-step1-gateway-routing` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/13.
+- PR #13 is merged: `codex/p3-step1-gateway-routing` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/13.
+- PR #14 is open: `codex/p3-step2-capability-policy` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/14.
 
 ## Validation
 
@@ -85,13 +93,17 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - `go test ./...` — passed after P3 Step 1.
 - `go build ./cmd/...` — passed after P3 Step 1.
 - `go vet ./...` — passed after P3 Step 1.
+- `go test ./internal/agent/gateway` — passed after P3 Step 2.
+- `go test ./...` — passed after P3 Step 2.
+- `go build ./cmd/...` — passed after P3 Step 2.
+- `go vet ./...` — passed after P3 Step 2.
 - `git diff --check` — passed before the lifecycle commit.
 - `go test -race ./internal/agent/runtime` — not runnable in this workstation environment: Go reports `-race requires cgo; enable cgo by setting CGO_ENABLED=1`; `go env` reports `CGO_ENABLED=0` and no `gcc`, `clang`, or `cl` executable is installed. No toolchain installation was attempted because it is outside this node's scope.
 
 ## Next actions
 
-1. Have PR #13 reviewed and merged without widening its scope.
-2. After merge, choose one separate P3 node: Capability policy or a constrained Skill/MCP execution path. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
+1. Have PR #14 reviewed and merged without widening its scope.
+2. After merge, choose one constrained Skill/MCP execution-path node. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
@@ -110,6 +122,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - `internal/core/service/query_service.go` — existing synchronous QA path's minimal Runtime wrapper.
 - `internal/agent/gateway/router.go` — trusted Gateway model/workflow routing contract.
 - `docs/p3-step1-gateway-routing.zh.md` — P3 Step 1 scope and acceptance.
+- `internal/agent/gateway/capability.go` — static default-deny Capability policy.
+- `docs/p3-step2-capability-policy.zh.md` — P3 Step 2 scope and acceptance.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
