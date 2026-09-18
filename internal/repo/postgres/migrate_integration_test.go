@@ -48,6 +48,7 @@ func TestWorkflowCheckpointStoreCreatesLoadsAndUsesCAS(t *testing.T) {
 		TenantID: "tenant-a", UserID: "user-a", PatientID: "patient-a",
 		SessionID: "c96e73cf-345e-4eb6-8a05-b9f519799caa", RequestID: "request-a",
 	}
+	require.NoError(t, db.Create(&SessionModel{ID: scope.SessionID, UserID: scope.UserID, Title: "checkpoint test"}).Error)
 	first := runtime.Checkpoint{
 		RunID: "1d9e6479-e9d0-4906-9da8-8b2cd3d7c3cb", Scope: scope,
 		WorkflowID: "fixed-workflow", WorkflowVersion: "v1", Status: runtime.RunRunning,
