@@ -4,7 +4,7 @@ Updated: 2026-09-18T10:09:23+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p1-step2-event-surface`
-HEAD before this checkpoint-only update: `51e5e239b765b110282a39fee7f1576100f25080`
+Latest pushed checkpoint commit before this update: `4109397e8a86c1f50deedb0023095b8f313bcacd`
 P1 node 1 code commit: `eba5a534b42cd4854a9a0816ab1b26b09f564ab6`
 P1 node 2 code commit: `fbad478ef9b0d647241073d1f3844e04b95c2b2c`
 
@@ -33,7 +33,7 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 and the core 
   - the initial schema includes existing business tables plus Event Log, projection, outbox, and reserved agent tables;
   - PostgreSQL integration tests cover repeatable initialization, unknown-schema rejection, incomplete-schema rejection, transactions, uniqueness, and ownership scope;
   - CI now starts PostgreSQL and runs the integration tests.
-- P1 node 1 is committed and pushed in `eba5a53`; PR #7 is open: `codex/p1-step1-postgres-foundation` → `codex/p0-step2-decisions`.
+- P1 node 1 is committed in `eba5a53`; PR #7 is merged with merge commit `f00fc3316bda0677935b08741d6e71f55be896fb`.
 - P1 node 2 is implemented:
   - typed Event Log and stable P1 event names;
   - session/message facts and Events commit in the same transaction;
@@ -43,15 +43,14 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 and the core 
   - versioned Redis Surface with event waterline validation and PostgreSQL rebuild;
   - real PostgreSQL/Redis tests for replay, concurrency, projection restart, stale cache refresh, and cache deletion recovery.
 - The core P1 acceptance in `docs/design/p1-event-contract.zh.md` is satisfied. Remaining smoke-matrix items belong to later RAG, LangGraph, and mailbox phases.
-- P1 node 2 is committed and pushed in `fbad478`; PR #8 is open: `codex/p1-step2-event-surface` → `codex/p1-step1-postgres-foundation`.
+- P1 node 2 is committed in `fbad478`; PR #8 is merged with merge commit `33febb840c7393a1e6110adcb9717db64905fef6`.
 
 ## Current state
 
 - Working tree: clean before this checkpoint metadata update.
-- Current branch is based on P1 node 1 commit `d7b22706bf2163b5459d1c47d3d53e036b76c222`.
+- Current branch contains the merged P1 node 2 source plus checkpoint-only commits pushed after PR #8 merged.
 - PR #3 remains open as a draft in the older stack; PRs #4, #5, and #6 are merged.
-- PR #7 is open and mergeable.
-- PR #8 is open and mergeable; no commit status contexts were reported when last checked.
+- PRs #7 and #8 are merged. The next PR should use `codex/p1-step2-event-surface` as its base so the post-merge checkpoint commits do not appear as unrelated P2 changes.
 - Docker Desktop recovered after a transient Ubuntu WSL integration failure.
 - Disposable PostgreSQL and Redis test containers were stopped and removed after validation.
 
@@ -70,7 +69,7 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 and the core 
 
 ## Next actions
 
-1. Re-check PR #8 mergeability and CI, then create `codex/p2-step1-runtime-lifecycle` from the verified `codex/p1-step2-event-surface` head.
+1. Fetch remote state, then create `codex/p2-step1-runtime-lifecycle` from the latest `origin/codex/p1-step2-event-surface` head.
 2. Implement only `internal/agent/runtime` lifecycle primitives: request Scope metadata/context propagation, an idempotent LIFO disposer stack, rollback when initialization fails, and a bounded task group with cancellation propagation.
 3. Add focused tests for LIFO cleanup, partial-initialization rollback, repeated close, parent cancellation, first-error cancellation, and concurrency bounds. Run `go test -race ./internal/agent/runtime`, `go test ./...`, `go build ./cmd/...`, and `go vet ./...`.
 4. Document this node as having no schema migration and no query-path behavior change. Update this checkpoint, commit, push, and create a PR against `codex/p1-step2-event-surface`.
@@ -78,7 +77,7 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 and the core 
 
 ## Blockers and risks
 
-- The PR history is still stacked on intermediate branches rather than integrated into `develop`.
+- The P1 stack is merged through its intermediate branches but is still not consolidated into `develop`.
 - The next token budget is expected to cover only P2 lifecycle primitives; expanding scope risks leaving a non-reviewable partial node.
 - Docker Desktop's WSL integration failed once during image startup and recovered after restart; re-check it before real-dependency tests.
 - LangGraph PostgreSQL recovery and Qdrant/RAG degradation remain later P4 and P6 work.
