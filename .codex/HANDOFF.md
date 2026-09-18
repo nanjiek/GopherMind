@@ -1,6 +1,6 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T12:52:00+08:00
+Updated: 2026-09-18T12:56:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p3-step5-mcp-gateway`
@@ -104,7 +104,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - PR #14 is merged: `codex/p3-step2-capability-policy` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/14.
 - PR #15 is merged: `codex/p3-step3-tool-skill-executor` -> `codex/p1-step2-event-surface` at `64107b467b8351e381baeaf696af263398a53ab7`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/15.
 - PR #16 is merged: `codex/p3-step4-http-executor` -> `codex/p1-step2-event-surface` at `5dd3841a80269a236df4667657db674bc6cc6fb0`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/16.
-- P3 Step 5 branch is pushed: `codex/p3-step5-mcp-gateway` (implementation commit `bd8ffad1b1116e4ec7105a110e9d81de6ae6cda0`), pending PR creation against `codex/p1-step2-event-surface`.
+- PR #17 is open: `codex/p3-step5-mcp-gateway` -> `codex/p1-step2-event-surface` (implementation commit `bd8ffad1b1116e4ec7105a110e9d81de6ae6cda0`) — https://github.com/nanjiek/GopherMind/pull/17.
 
 ## Validation
 
