@@ -14,7 +14,7 @@ P4 static workflow recovery implementation commit: `5317b104c99846c7de75d89af2ca
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P4 now includes the fixed graph, lifecycle, checkpoint authority, pure-node recovery, static Task DAG, Task Board CAS/fencing/dependency timeout, and durable Mailbox coordination.
+Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P4 includes the fixed graph, lifecycle, checkpoint authority, pure-node recovery, static Task DAG, Task Board CAS/fencing/dependency timeout, durable Mailbox coordination, and has a final fixed multi-Agent execution branch pending the reliable-coordination merge.
 
 ## User decisions and standing constraints
 
@@ -122,6 +122,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P4 Step 4 static workflow recovery is committed in `5317b104c99846c7de75d89af2ca68b8bceafa4c`: `StaticWorkflowRecoveryRunner` saves every completed fixed pure node by checkpoint CAS and resumes from the stored next node; tests prove recovery at Evidence skips Intake/routing and failures persist a failed checkpoint. No external side effect, Task DAG/Mailbox, lease/fencing, queue semantics, LangGraph integration, old-MySQL migration, dual write, CDC, or backfill changed.
 - P4 Step 5 durable Task/DAG minimum contract is committed in `e75a6e7556e91ef2c515f699005dbfa7cedabda2`: trusted Run-bound task identity, static dependency validation, cycle rejection, and PostgreSQL task/edge tables. `TaskDAGStore` persists or loads a whole validated graph only through exact trusted scope; roots are `ready`, dependent tasks are `blocked`.
 - P4 reliable coordination is committed in `d8d32ae193501118c3ef0dfb589be5703c3560d3`: Task state CAS, deadline expiry, lease/fencing, durable Mailbox, at-least-once logical queue delivery, and restart recovery. Task success remains the only completion authority; Mailbox acknowledgement only records delivery. The implementation deliberately has no actual worker execution, dynamic delegation, external broker, connection recovery, LangGraph SDK claim, or external side effect.
+- P4 final fixed multi-Agent execution is implemented on `codex/p4-final-fixed-team-execution` pending the #23 merge: Lead creates the closed Intake/Triage → Evidence → Safety → Response DAG; pure fixed workers claim Task/Mailbox work, receive only dependency-allowed structured data, persist results, and resume without re-executing succeeded Tasks. No model-driven delegation, external effect, or dynamic topology is introduced.
 
 ## Current state
 
@@ -198,7 +199,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Next actions
 
-1. Review and merge the P4 reliable-coordination PR after its required GitHub checks pass.
+1. Merge PR #23 (checks passed), rebase `codex/p4-final-fixed-team-execution` onto `codex/p1-step2-event-surface`, and create the final P4 PR.
 2. Evaluate the implemented Agent architecture against the original V3 plan before selecting P5 work.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
@@ -247,6 +248,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - `internal/repo/postgres/mailbox_store.go` — transactional PostgreSQL at-least-once Mailbox authority.
 - `internal/repo/postgres/migrations/000004_task_coordination.up.sql` — Task lease/deadline fields and Mailbox logical-queue table.
 - `docs/p4-reliable-coordination.zh.md` — P4 completion semantics, exclusions, and acceptance.
+- `internal/agent/runtime/fixed_team.go` — closed Lead/worker multi-Agent execution and restart-resume coordinator.
+- `docs/p4-fixed-team-execution.zh.md` — final P4 fixed multi-Agent topology, input isolation, and completion semantics.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.

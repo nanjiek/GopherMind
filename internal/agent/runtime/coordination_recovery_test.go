@@ -23,7 +23,7 @@ type recoveringTaskBoard struct{ count int }
 func (s *recoveringTaskBoard) Claim(context.Context, Metadata, string, int64, string, time.Duration) (TaskLease, error) {
 	return TaskLease{}, nil
 }
-func (s *recoveringTaskBoard) Complete(context.Context, Metadata, string, int64, int64, TaskStatus, string) (AgentTask, error) {
+func (s *recoveringTaskBoard) Complete(context.Context, Metadata, string, int64, int64, TaskCompletion) (AgentTask, error) {
 	return AgentTask{}, nil
 }
 func (s *recoveringTaskBoard) RecoverExpired(context.Context, Metadata, string, time.Time) (int, error) {
