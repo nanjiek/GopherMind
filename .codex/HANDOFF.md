@@ -1,19 +1,20 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T22:51:58+08:00
+Updated: 2026-09-19T00:53:31+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p4-step3-workflow-checkpoint`
+Branch: `codex/p4-step4-static-workflow-recovery`
 Tool/Skill executor implementation commit: `ff1c4b9eec112313514fc213dc9431a78bc92389`
 HTTP executor implementation commit: `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`
 MCP Gateway implementation commit: `bd8ffad1b1116e4ec7105a110e9d81de6ae6cda0`
 P4 fixed workflow implementation commit: `1ebfa7fd0a6760edbd0e9dec76b2ad64a113754c`
 P4 fixed workflow runner implementation commit: `38d6e0c880ac390bbc6546bdfb36f4e932b89b64`
 P4 workflow checkpoint implementation commit: `bbea5dfa4b5491db55fa912f4ed2e88ae8cb3c61`
+P4 static workflow recovery implementation commit: `5317b104c99846c7de75d89af2ca68b8bceafa4c`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P4 Steps 1–3 provide the fixed graph, its in-memory Run lifecycle, and a PostgreSQL checkpoint authority; recovery execution and multi-agent work remain later P4 nodes.
+Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P4 Steps 1–4 provide the fixed graph, its lifecycle, checkpoint authority, and pure static-node recovery; Task DAG/Mailbox and multi-agent work remain later P4 nodes.
 
 ## User decisions and standing constraints
 
@@ -28,6 +29,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P4 Step 1 is limited to the fixed Intake → risk routing → Evidence → Safety → Response in-process graph. Do not implement durable Task DAG/Mailbox, dynamic multi-agent delegation, connection recovery, PostgreSQL state persistence, or queue semantics.
 - P4 Step 2 is limited to the in-memory protocol that transitions a Run through the closed P4 Step 1 graph and commits its response as one `return_result`. Do not add retries, recovery, persistence, publication, Queue/Task/Mailbox semantics, QueryService/StreamService integration, or dynamic delegation.
 - P4 Step 3 is limited to scope-bound PostgreSQL checkpoint state and revision CAS. Do not claim LangGraph integration, connect checkpointing to execution/recovery, or add Task DAG/Mailbox, lease, fencing token, queue, retry, dynamic delegation, or external side effects.
+- P4 Step 4 resumes only pure in-process fixed graph nodes from checkpointed structured handoffs. Do not use it for side effects or add Durable Action/Task, Task DAG/Mailbox, lease/fencing, queue, retry, dynamic delegation, or LangGraph integration.
 - Any future P4 node with an external side effect must use the existing executor boundary and re-authorize Capability immediately before that effect.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
@@ -117,10 +119,11 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
   - `WorkflowCheckpointStore` creates revision 1, reads only within exact trusted scope, and advances current state plus history atomically through revision CAS; stale writers are rejected.
   - Focused runtime tests cover checkpoint validation, bounds, and defensive copies. PostgreSQL migration/store integration tests are present but skipped locally because `POSTGRES_TEST_DSN` is unset.
 - No LangGraph runtime claim, automatic recovery, Task DAG/Mailbox, lease, fencing token, queue semantics, dynamic delegation, model/Tool/Skill/HTTP/MCP execution, old-MySQL migration, dual write, CDC, backfill, or schema behavior outside migration 2 changed in P4 Step 3.
+- P4 Step 4 static workflow recovery is committed in `5317b104c99846c7de75d89af2ca68b8bceafa4c`: `StaticWorkflowRecoveryRunner` saves every completed fixed pure node by checkpoint CAS and resumes from the stored next node; tests prove recovery at Evidence skips Intake/routing and failures persist a failed checkpoint. No external side effect, Task DAG/Mailbox, lease/fencing, queue semantics, LangGraph integration, old-MySQL migration, dual write, CDC, or backfill changed.
 
 ## Current state
 
-- Working tree: clean after the PR checkpoint update is committed and pushed.
+- Working tree: clean after the P4 Step 4 implementation commit; this checkpoint update is the only pending tracked change until committed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -133,7 +136,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #17 is merged: `codex/p3-step5-mcp-gateway` -> `codex/p1-step2-event-surface` at `2eb8b49ef60907d45d8e1fba254fd69e74627758`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/17. P3 is complete.
 - PR #18 is merged: `codex/p4-step1-fixed-workflow-graph` -> `codex/p1-step2-event-surface` at `c53d9e25b2cc04b3886bd40a9371ee121c9ffd39`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/18.
 - PR #19 is merged: `codex/p4-step2-fixed-workflow-runner` -> `codex/p1-step2-event-surface` at `c336f3f8010effe7e6e55b70ef6800d450c0d409`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/19.
-- PR #20 is open: `codex/p4-step3-workflow-checkpoint` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/20.
+- PR #20 is merged: `codex/p4-step3-workflow-checkpoint` -> `codex/p1-step2-event-surface` at `ac7d8709c7abe1a103e4f6ead2064537162ca3e6`; GitHub `go` and `frontend` checks passed after checkpoint test fixes — https://github.com/nanjiek/GopherMind/pull/20.
+- P4 Step 4 branch: `codex/p4-step4-static-workflow-recovery` -> `codex/p1-step2-event-surface`; PR creation is the next authorized action.
 
 ## Validation
 
@@ -188,8 +192,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Next actions
 
-1. Review and merge PR #20 after its required GitHub checks pass.
-2. Select P4 Step 4 as a separate reviewable contract. The next likely concern is binding checkpoint CAS to explicit recovery execution; Task DAG/Mailbox, lease/fencing, and dynamic multi-agent delegation remain separately reviewable.
+1. Push this P4 Step 4 branch and create its PR with base `codex/p1-step2-event-surface`; then record its URL/state here.
+2. Select P4 Step 5 as a separate reviewable contract: durable Task/DAG identity and dependency validation, before Mailbox delivery and lease/fencing.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
@@ -226,6 +230,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - `internal/repo/postgres/checkpoint_store.go` — PostgreSQL checkpoint authority, exact scope reads, and revision-CAS writes.
 - `internal/repo/postgres/migrations/000002_workflow_checkpoints.up.sql` — migration 2 canonical checkpoint and immutable history schema.
 - `docs/p4-step3-workflow-checkpoint.zh.md` — P4 Step 3 scope, exclusions, and acceptance.
+- `internal/agent/runtime/static_workflow_recovery.go` — checkpoint-CAS execution and pure static graph resume.
+- `docs/p4-step4-static-workflow-recovery.zh.md` — P4 Step 4 scope, exclusions, and acceptance.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
