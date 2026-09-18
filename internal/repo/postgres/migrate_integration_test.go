@@ -27,7 +27,7 @@ func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
 
 	var versions int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM schema_migrations").Scan(&versions).Error)
-	require.Equal(t, int64(2), versions)
+	require.Equal(t, int64(3), versions)
 
 	var tables int64
 	require.NoError(t, db.Raw(`
@@ -36,6 +36,39 @@ func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
 		  AND table_name IN ('sessions', 'messages', 'clinical_events', 'projection_checkpoints', 'outbox_messages')
 	`).Scan(&tables).Error)
 	require.Equal(t, int64(5), tables)
+}
+
+func TestTaskDAGStoreCreatesLoadsAndScopesStaticGraph(t *testing.T) {
+	db, cleanup := isolatedTestSchema(t)
+	defer cleanup()
+	require.NoError(t, ApplyMigrations(context.Background(), db))
+
+	scope := runtime.Metadata{TenantID: "tenant-a", UserID: "user-a", PatientID: "patient-a", SessionID: "c96e73cf-345e-4eb6-8a05-b9f519799caa"}
+	require.NoError(t, db.Create(&SessionModel{ID: scope.SessionID, UserID: scope.UserID, Title: "task DAG test"}).Error)
+	checkpointStore := NewWorkflowCheckpointStore(db)
+	runID := "96c4f4d6-6ab8-4b5f-b1a4-9266a37eeb6b"
+	_, err := checkpointStore.Create(context.Background(), runtime.Checkpoint{
+		RunID: runID, Scope: scope, WorkflowID: "fixed-workflow", WorkflowVersion: "v1", Status: runtime.RunRunning,
+		CurrentNode: "evidence", Revision: 1, State: []byte(`{"state":"running"}`),
+	})
+	require.NoError(t, err)
+
+	store := NewTaskDAGStore(db)
+	created, err := store.Create(context.Background(), runtime.TaskDAG{RunID: runID, Scope: scope, Tasks: []runtime.AgentTask{
+		{TaskID: "08d0d955-0ab9-4e4f-bf98-3266f837a15c", Type: "intake", OwnerAgentID: "intake-agent", IdempotencyKey: "intake", Revision: 1},
+		{TaskID: "5d9a7ed8-d5ea-4d97-bfc7-87dbd25bd9c0", Type: "evidence", OwnerAgentID: "evidence-agent", IdempotencyKey: "evidence", BlockedBy: []string{"08d0d955-0ab9-4e4f-bf98-3266f837a15c"}, Revision: 1},
+	}})
+	require.NoError(t, err)
+	require.Equal(t, runtime.TaskReady, created.Tasks[0].Status)
+	require.Equal(t, runtime.TaskBlocked, created.Tasks[1].Status)
+
+	loaded, err := store.Load(context.Background(), scope, runID)
+	require.NoError(t, err)
+	require.Len(t, loaded.Tasks, 2)
+	wrongScope := scope
+	wrongScope.UserID = "user-b"
+	_, err = store.Load(context.Background(), wrongScope, runID)
+	require.ErrorIs(t, err, runtime.ErrTaskDAGNotFound)
 }
 
 func TestWorkflowCheckpointStoreCreatesLoadsAndUsesCAS(t *testing.T) {
