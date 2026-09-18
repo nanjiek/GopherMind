@@ -1,14 +1,15 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T12:01:00+08:00
+Updated: 2026-09-18T12:24:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p1-step2-event-surface`
+Branch: `codex/p3-step4-http-executor`
 Tool/Skill executor implementation commit: `ff1c4b9eec112313514fc213dc9431a78bc92389`
+HTTP executor implementation commit: `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. P3 Steps 1–3 establish Gateway routing, Capability policy, and a constrained in-process Tool/Skill execution boundary; MCP and HTTP remain later P3 work.
+Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. P3 Steps 1–4 establish Gateway routing, Capability policy, constrained in-process Tool/Skill execution, and constrained static HTTP execution; MCP remains later P3 work.
 
 ## User decisions and standing constraints
 
@@ -18,6 +19,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - P3 Step 1 is limited to trusted risk/task routing. Do not connect HTTP, QueryService, StreamService, Provider execution, Capability policy, Skill/Tool/MCP execution, budgets, or persistence in this node.
 - P3 Step 2 is limited to static Capability policy. Do not execute Tool/Skill/MCP, connect HTTP/providers, or add budgets, audit persistence, or schema changes.
 - P3 Step 3 executes only registered in-process Tool/Skill handlers after immediate policy authorization. Do not start MCP/HTTP transports or add schema, budgets, audit persistence, retry, or circuit breaking.
+- P3 Step 4 executes only registered static HTTP endpoints. Invocation input must not select URL, method, or headers; authorization must run immediately before `client.Do`. Do not start MCP, add credentials, dynamic endpoints, persistence, budgets, audit, retries, circuit breaking, providers, or schema changes.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
 ## Completed
@@ -73,10 +75,17 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
   - output must remain within its declared cap and be valid JSON;
   - tests prove denial prevents handler execution, patient-bound authorization, invalid input, and oversized output rejection.
 - No MCP/HTTP transport, budget, audit persistence, retry, circuit breaking, provider integration, or schema behavior changed in P3 Step 3.
+- P3 Step 4 constrained HTTP executor is committed in `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`:
+  - registered manifests fix an HTTP/HTTPS URL, GET/POST method, capability, request/response size limits, and timeout;
+  - invocation input can supply only a JSON body; it cannot select a target, method, or headers;
+  - each request completes validation and endpoint lookup, then calls Capability policy authorization immediately before `client.Do`;
+  - redirects are disabled, parent cancellation propagates, and non-2xx, oversized, and non-JSON responses are rejected;
+  - tests cover successful registered calls, denial preventing a request, request/response bounds, JSON validation, redirect rejection, and parent cancellation.
+- No MCP transport, dynamic destination, credentials, budgets, audit persistence, retry, circuit breaking, provider integration, or schema behavior changed in P3 Step 4.
 
 ## Current state
 
-- Working tree: clean after P3 Step 3 commits were pushed.
+- Working tree: clean after P3 Step 4 implementation commit was pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -85,6 +94,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - PR #13 is merged: `codex/p3-step1-gateway-routing` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/13.
 - PR #14 is merged: `codex/p3-step2-capability-policy` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/14.
 - PR #15 is merged: `codex/p3-step3-tool-skill-executor` -> `codex/p1-step2-event-surface` at `64107b467b8351e381baeaf696af263398a53ab7`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/15.
+- PR #16 is open: `codex/p3-step4-http-executor` -> `codex/p1-step2-event-surface` (implementation commit `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`) — https://github.com/nanjiek/GopherMind/pull/16.
 
 ## Validation
 
@@ -110,13 +120,18 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - `go test ./...` — passed after P3 Step 3.
 - `go build ./cmd/...` — passed after P3 Step 3.
 - `go vet ./...` — passed after P3 Step 3.
+- `go test ./internal/agent/gateway -count=20` — passed after P3 Step 4.
+- `go test ./...` — passed after P3 Step 4.
+- `go build ./cmd/...` — passed after P3 Step 4.
+- `go vet ./...` — passed after P3 Step 4.
 - `git diff --check` — passed before the lifecycle commit.
 - `go test -race ./internal/agent/runtime` — not runnable in this workstation environment: Go reports `-race requires cgo; enable cgo by setting CGO_ENABLED=1`; `go env` reports `CGO_ENABLED=0` and no `gcc`, `clang`, or `cl` executable is installed. No toolchain installation was attempted because it is outside this node's scope.
 
 ## Next actions
 
-1. Choose one P3 node: MCP Gateway health/adapter or HTTP integration for a registered constrained executable. In either case, authorize again immediately before every external side effect. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
-2. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
+1. Create, review, and merge the P3 Step 4 PR without widening its scope.
+2. After merge, choose the next P3 node: MCP Gateway health/adapter. Every future external side effect must re-authorize immediately before execution. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
+3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
 
@@ -138,6 +153,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - `docs/p3-step2-capability-policy.zh.md` — P3 Step 2 scope and acceptance.
 - `internal/agent/gateway/executor.go` — immediate-authorization Tool/Skill execution boundary.
 - `docs/p3-step3-tool-skill-executor.zh.md` — P3 Step 3 scope and acceptance.
+- `internal/agent/gateway/http_executor.go` — static endpoint HTTP execution boundary with immediate re-authorization.
+- `docs/p3-step4-http-executor.zh.md` — P3 Step 4 scope and acceptance.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
