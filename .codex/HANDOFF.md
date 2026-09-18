@@ -49,7 +49,7 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 and the core 
 - Current branch is based on P1 node 1 commit `d7b22706bf2163b5459d1c47d3d53e036b76c222`.
 - PR #3 remains open as a draft in the older stack; PRs #4, #5, and #6 are merged.
 - PR #7 is open and mergeable.
-- PR #8 is open; GitHub was still calculating mergeability immediately after creation.
+- PR #8 is open and mergeable; no commit status contexts were reported when last checked.
 - Docker Desktop recovered after a transient Ubuntu WSL integration failure.
 - Disposable PostgreSQL and Redis test containers were stopped and removed after validation.
 
