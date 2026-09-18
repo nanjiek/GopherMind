@@ -1,16 +1,17 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T13:04:00+08:00
+Updated: 2026-09-18T20:51:36+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p1-step2-event-surface`
+Branch: `codex/p4-step1-fixed-workflow-graph`
 Tool/Skill executor implementation commit: `ff1c4b9eec112313514fc213dc9431a78bc92389`
 HTTP executor implementation commit: `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`
 MCP Gateway implementation commit: `bd8ffad1b1116e4ec7105a110e9d81de6ae6cda0`
+P4 fixed workflow implementation commit: `1ebfa7fd0a6760edbd0e9dec76b2ad64a113754c`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P3 establishes Gateway routing, Capability policy, constrained Tool/Skill execution, static HTTP execution, and static MCP Gateway adaptation. The next phase is P4 recoverable workflow and multi-agent work.
+Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P4 Step 1 adds only the fixed in-memory Intake → risk routing → Evidence → Safety → Response graph; durable recovery and multi-agent work remain later P4 nodes.
 
 ## User decisions and standing constraints
 
@@ -22,6 +23,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P3 Step 3 executes only registered in-process Tool/Skill handlers after immediate policy authorization. Do not start MCP/HTTP transports or add schema, budgets, audit persistence, retry, or circuit breaking.
 - P3 Step 4 executes only registered static HTTP endpoints. Invocation input must not select URL, method, or headers; authorization must run immediately before `client.Do`. Do not start MCP, add credentials, dynamic endpoints, persistence, budgets, audit, retries, circuit breaking, providers, or schema changes.
 - P3 Step 5 adapts only pre-connected, registered MCP peers with fixed remote tool names. Authorization must run immediately before both `Ping` and `CallTool`. Do not create connections, enumerate remote tools, inject credentials, add persistence, budgets, audit, retries, circuit breaking, async Task/Mailbox, providers, or schema changes.
+- P4 Step 1 is limited to the fixed Intake → risk routing → Evidence → Safety → Response in-process graph. Do not implement durable Task DAG/Mailbox, dynamic multi-agent delegation, connection recovery, PostgreSQL state persistence, or queue semantics.
+- Any future P4 node with an external side effect must use the existing executor boundary and re-authorize Capability immediately before that effect.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
 ## Completed
@@ -91,10 +94,17 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
   - parent cancellation propagates; invalid, oversized, and absent results are rejected;
   - tests cover static tool adaptation, denial preventing CallTool/Ping, patient scope, bounds, invalid arguments, and parent cancellation.
 - No MCP connection creation, dynamic discovery, credential injection, persistence, budgets, audit, retry, circuit breaking, async Task/Mailbox, provider integration, or schema behavior changed in P3 Step 5.
+- P4 Step 1 fixed workflow graph is committed in `1ebfa7fd0a6760edbd0e9dec76b2ad64a113754c`:
+  - `runtime.FixedWorkflow` requires five distinct typed nodes and always executes them in the closed order Intake → risk routing → Evidence → Safety → Response.
+  - Each node handoff is structured JSON-object data copied at the boundary; routing has a distinct trusted input/output contract and records an explicit versioned workflow decision.
+  - Execution writes the current fixed node into the existing in-memory `Run`, fails fast at the first node error, and does not transition lifecycle state, publish output, or produce an external side effect.
+  - `gateway.FixedWorkflowRiskRoutingNode` adapts the existing deterministic `gateway.Router` without a runtime-to-gateway import cycle; it neither calls a model nor creates a connection.
+  - Focused tests cover fixed ordering/data handoff, short-circuiting, invalid contracts/data, defensive copies, and Gateway route adaptation.
+- No durable Task DAG/Mailbox, dynamic delegation, connection recovery, PostgreSQL persistence, migration, queue semantics, model/Tool/Skill/HTTP/MCP execution, or schema behavior changed in P4 Step 1.
 
 ## Current state
 
-- Working tree: clean after P3 Step 5 merge was fast-forwarded locally.
+- Working tree: clean after the PR checkpoint update is committed and pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -105,6 +115,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #15 is merged: `codex/p3-step3-tool-skill-executor` -> `codex/p1-step2-event-surface` at `64107b467b8351e381baeaf696af263398a53ab7`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/15.
 - PR #16 is merged: `codex/p3-step4-http-executor` -> `codex/p1-step2-event-surface` at `5dd3841a80269a236df4667657db674bc6cc6fb0`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/16.
 - PR #17 is merged: `codex/p3-step5-mcp-gateway` -> `codex/p1-step2-event-surface` at `2eb8b49ef60907d45d8e1fba254fd69e74627758`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/17. P3 is complete.
+- PR #18 is open: `codex/p4-step1-fixed-workflow-graph` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/18.
 
 ## Validation
 
@@ -138,13 +149,19 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - `go test ./...` — passed after P3 Step 5.
 - `go build ./cmd/...` — passed after P3 Step 5.
 - `go vet ./...` — passed after P3 Step 5.
+- `go test ./internal/agent/runtime ./internal/agent/gateway` — passed after P4 Step 1.
+- `go test ./...` — passed after P4 Step 1.
+- `go build ./cmd/...` — passed after P4 Step 1.
+- `go vet ./...` — passed after P4 Step 1.
+- `git diff --check` — passed after P4 Step 1.
 - `git diff --check` — passed before the lifecycle commit.
 - `go test -race ./internal/agent/runtime` — not runnable in this workstation environment: Go reports `-race requires cgo; enable cgo by setting CGO_ENABLED=1`; `go env` reports `CGO_ENABLED=0` and no `gcc`, `clang`, or `cl` executable is installed. No toolchain installation was attempted because it is outside this node's scope.
 
 ## Next actions
 
-1. Start P4 with the fixed Intake -> risk routing -> Evidence -> Safety -> Response graph, keeping durable Task DAG/Mailbox and multi-agent dynamic delegation in separately reviewable nodes.
-2. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
+1. Review and merge PR #18 after its required GitHub checks pass.
+2. Select P4 Step 2 as a separate reviewable contract. Durable Task DAG/Mailbox, dynamic multi-agent delegation, connection recovery, PostgreSQL state persistence, and queue semantics all remain deferred.
+3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
 
@@ -170,6 +187,9 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - `docs/p3-step4-http-executor.zh.md` — P3 Step 4 scope and acceptance.
 - `internal/agent/gateway/mcp_gateway.go` — static MCP peer/tool adaptation and authorized health boundary.
 - `docs/p3-step5-mcp-gateway.zh.md` — P3 Step 5 scope and acceptance.
+- `internal/agent/runtime/fixed_workflow.go` — closed P4 Step 1 node graph, structured handoffs, and in-memory Run current-node recording.
+- `internal/agent/gateway/fixed_workflow.go` — one-way adapter from the fixed runtime routing contract to the existing Gateway Router.
+- `docs/p4-step1-fixed-workflow-graph.zh.md` — P4 Step 1 scope, exclusions, and acceptance.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
