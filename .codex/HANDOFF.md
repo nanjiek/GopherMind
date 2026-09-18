@@ -1,16 +1,16 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T12:56:00+08:00
+Updated: 2026-09-18T13:04:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p3-step5-mcp-gateway`
+Branch: `codex/p1-step2-event-surface`
 Tool/Skill executor implementation commit: `ff1c4b9eec112313514fc213dc9431a78bc92389`
 HTTP executor implementation commit: `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`
 MCP Gateway implementation commit: `bd8ffad1b1116e4ec7105a110e9d81de6ae6cda0`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. P3 Steps 1–5 establish Gateway routing, Capability policy, constrained Tool/Skill execution, static HTTP execution, and static MCP Gateway adaptation; P3 awaits only review and merge of its final node.
+Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. P3 establishes Gateway routing, Capability policy, constrained Tool/Skill execution, static HTTP execution, and static MCP Gateway adaptation. The next phase is P4 recoverable workflow and multi-agent work.
 
 ## User decisions and standing constraints
 
@@ -94,7 +94,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 
 ## Current state
 
-- Working tree: clean after P3 Step 5 implementation commit was pushed.
+- Working tree: clean after P3 Step 5 merge was fast-forwarded locally.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -104,7 +104,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - PR #14 is merged: `codex/p3-step2-capability-policy` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/14.
 - PR #15 is merged: `codex/p3-step3-tool-skill-executor` -> `codex/p1-step2-event-surface` at `64107b467b8351e381baeaf696af263398a53ab7`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/15.
 - PR #16 is merged: `codex/p3-step4-http-executor` -> `codex/p1-step2-event-surface` at `5dd3841a80269a236df4667657db674bc6cc6fb0`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/16.
-- PR #17 is open: `codex/p3-step5-mcp-gateway` -> `codex/p1-step2-event-surface` (implementation commit `bd8ffad1b1116e4ec7105a110e9d81de6ae6cda0`) — https://github.com/nanjiek/GopherMind/pull/17.
+- PR #17 is merged: `codex/p3-step5-mcp-gateway` -> `codex/p1-step2-event-surface` at `2eb8b49ef60907d45d8e1fba254fd69e74627758`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/17. P3 is complete.
 
 ## Validation
 
@@ -143,9 +143,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 
 ## Next actions
 
-1. Create, review, and merge the P3 Step 5 PR without widening its scope. After that, P3 is complete.
-2. Start P4 with the fixed Intake -> risk routing -> Evidence -> Safety -> Response graph, keeping durable Task DAG/Mailbox and multi-agent dynamic delegation in separately reviewable nodes.
-3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
+1. Start P4 with the fixed Intake -> risk routing -> Evidence -> Safety -> Response graph, keeping durable Task DAG/Mailbox and multi-agent dynamic delegation in separately reviewable nodes.
+2. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
 
