@@ -1,6 +1,6 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T22:39:03+08:00
+Updated: 2026-09-18T22:40:18+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p4-step2-fixed-workflow-runner`
@@ -112,7 +112,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Current state
 
-- Working tree: clean after the P4 Step 2 implementation commit; this checkpoint update is the only pending tracked change until committed.
+- Working tree: clean after the PR checkpoint update is committed and pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -124,7 +124,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #16 is merged: `codex/p3-step4-http-executor` -> `codex/p1-step2-event-surface` at `5dd3841a80269a236df4667657db674bc6cc6fb0`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/16.
 - PR #17 is merged: `codex/p3-step5-mcp-gateway` -> `codex/p1-step2-event-surface` at `2eb8b49ef60907d45d8e1fba254fd69e74627758`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/17. P3 is complete.
 - PR #18 is merged: `codex/p4-step1-fixed-workflow-graph` -> `codex/p1-step2-event-surface` at `c53d9e25b2cc04b3886bd40a9371ee121c9ffd39`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/18.
-- P4 Step 2 branch: `codex/p4-step2-fixed-workflow-runner` -> `codex/p1-step2-event-surface`; PR creation is the next authorized action.
+- PR #19 is open: `codex/p4-step2-fixed-workflow-runner` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/19.
 
 ## Validation
 
@@ -173,7 +173,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Next actions
 
-1. Push `codex/p4-step2-fixed-workflow-runner` and create its PR with base `codex/p1-step2-event-surface`; then record the PR URL and state in this checkpoint.
+1. Review and merge PR #19 after its required GitHub checks pass.
 2. Select P4 Step 3 as a separate reviewable contract. Durable Task DAG/Mailbox, dynamic multi-agent delegation, connection recovery, PostgreSQL state persistence, and queue semantics all remain deferred.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
