@@ -141,6 +141,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #20 is merged: `codex/p4-step3-workflow-checkpoint` -> `codex/p1-step2-event-surface` at `ac7d8709c7abe1a103e4f6ead2064537162ca3e6`; GitHub `go` and `frontend` checks passed after checkpoint test fixes — https://github.com/nanjiek/GopherMind/pull/20.
 - PR #21 is merged: `codex/p4-step4-static-workflow-recovery` -> `codex/p1-step2-event-surface` at `340ab3608edf9abd402f2f8e502ef1b1dbcd4ae8` — https://github.com/nanjiek/GopherMind/pull/21.
 - PR #22 is merged: `codex/p4-step5-task-dag-contract` -> `codex/p1-step2-event-surface` at `69020192e88b561e568406127db7fe1627bce100`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/22.
+- PR #23 is open: `codex/p4-complete-reliable-coordination` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/23.
 
 ## Validation
 
