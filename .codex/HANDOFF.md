@@ -1,6 +1,6 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T11:10:00+08:00
+Updated: 2026-09-18T11:12:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p2-step4-runtime-completion`
@@ -53,12 +53,12 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 
 ## Current state
 
-- Working tree: expected clean after this checkpoint update is committed; P2 completion code is ahead of `origin/codex/p1-step2-event-surface`.
+- Working tree: clean after P2 completion commits were pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
 - PR #11 is merged: `codex/p2-step3-run-state-machine` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/11.
-- P2 Step 4 has no PR yet; it must use `codex/p1-step2-event-surface` as its base.
+- PR #12 is open: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
 
 ## Validation
 
@@ -77,7 +77,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 
 ## Next actions
 
-1. Commit this refreshed checkpoint, push `codex/p2-step4-runtime-completion`, and create its PR against `codex/p1-step2-event-surface`.
+1. Have PR #12 reviewed and merged without widening its scope.
 2. After merge, begin P3 as a separate node for model/workflow routing, Capability policy, or a constrained Skill/MCP execution path; do not add durable Task DAG/Mailbox work yet.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
