@@ -60,7 +60,7 @@ func TestWorkflowCheckpointStoreCreatesLoadsAndUsesCAS(t *testing.T) {
 
 	loaded, err := store.Load(context.Background(), scope, first.RunID)
 	require.NoError(t, err)
-	require.Equal(t, first.State, loaded.State)
+	require.JSONEq(t, string(first.State), string(loaded.State))
 	require.Equal(t, first.CurrentNode, loaded.CurrentNode)
 
 	next := loaded
