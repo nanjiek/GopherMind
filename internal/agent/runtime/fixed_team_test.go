@@ -47,6 +47,35 @@ func TestFixedTeamCoordinatorExecutesClosedDAGWithPrivateInputs(t *testing.T) {
 	}
 }
 
+func TestFixedTeamCoordinatorPlansOnlyTrustedStaticPaths(t *testing.T) {
+	coordinator := &FixedTeamCoordinator{}
+	scope := Metadata{TenantID: "tenant-a", UserID: "user-a"}
+	for _, test := range []struct {
+		path  FixedTeamPath
+		types []string
+	}{
+		{FixedTeamPathSimple, []string{"evidence", "response"}},
+		{FixedTeamPathStandard, []string{"intake", "triage", "evidence", "safety", "response"}},
+		{FixedTeamPathHuman, []string{"triage"}},
+	} {
+		dag, err := coordinator.plan(FixedTeamSpec{RunID: "run-a", Scope: scope, Deadline: time.Now().Add(time.Hour), Path: test.path}, json.RawMessage(`{"question":"q"}`))
+		if err != nil {
+			t.Fatalf("plan(%s) error = %v", test.path, err)
+		}
+		if len(dag.Tasks) != len(test.types) {
+			t.Fatalf("plan(%s) tasks = %d", test.path, len(dag.Tasks))
+		}
+		for index, task := range dag.Tasks {
+			if task.Type != test.types[index] {
+				t.Fatalf("plan(%s) task %d = %s, want %s", test.path, index, task.Type, test.types[index])
+			}
+		}
+	}
+	if _, err := coordinator.plan(FixedTeamSpec{RunID: "run-a", Scope: scope, Deadline: time.Now().Add(time.Hour), Path: "invented"}, json.RawMessage(`{"question":"q"}`)); err == nil {
+		t.Fatal("plan(invented) error = nil")
+	}
+}
+
 type memoryTeamTasks struct{ dag TaskDAG }
 
 func (s *memoryTeamTasks) Create(_ context.Context, dag TaskDAG) (TaskDAG, error) {

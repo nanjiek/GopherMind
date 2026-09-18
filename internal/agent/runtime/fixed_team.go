@@ -20,6 +20,16 @@ const (
 	TeamAgentResponse = "response-agent"
 )
 
+// FixedTeamPath is selected from trusted P3 routing data. It is closed: model
+// output and individual workers cannot introduce another topology.
+type FixedTeamPath string
+
+const (
+	FixedTeamPathSimple   FixedTeamPath = "simple"
+	FixedTeamPathStandard FixedTeamPath = "standard"
+	FixedTeamPathHuman    FixedTeamPath = "human_escalation"
+)
+
 // TeamAgent is a pure, bounded worker implementation. It receives only the
 // Lead-prepared input for its own fixed task; it has no Task Board, Mailbox, or
 // unrestricted graph handle. Side-effecting implementations must instead use
@@ -38,6 +48,7 @@ type FixedTeamSpec struct {
 	RunID    string
 	Scope    Metadata
 	Deadline time.Time
+	Path     FixedTeamPath
 }
 
 // FixedTeamCoordinator is the closed P4 Lead/Orchestrator. It creates the
@@ -111,13 +122,28 @@ func (c *FixedTeamCoordinator) Resume(ctx context.Context, scope Metadata, runID
 
 func (c *FixedTeamCoordinator) plan(spec FixedTeamSpec, request json.RawMessage) (TaskDAG, error) {
 	intakeID, triageID, evidenceID, safetyID, responseID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
-	return NewTaskDAG(TaskDAG{RunID: spec.RunID, Scope: spec.Scope, Tasks: []AgentTask{
+	standard := []AgentTask{
 		{TaskID: intakeID, Type: "intake", OwnerAgentID: TeamAgentIntake, IdempotencyKey: spec.RunID + ":intake", Revision: 1, Deadline: spec.Deadline, Input: cloneJSON(request)},
 		{TaskID: triageID, Type: "triage", OwnerAgentID: TeamAgentTriage, IdempotencyKey: spec.RunID + ":triage", Revision: 1, Deadline: spec.Deadline, Input: cloneJSON(request)},
 		{TaskID: evidenceID, Type: "evidence", OwnerAgentID: TeamAgentEvidence, IdempotencyKey: spec.RunID + ":evidence", Revision: 1, Deadline: spec.Deadline, BlockedBy: []string{intakeID, triageID}},
 		{TaskID: safetyID, Type: "safety", OwnerAgentID: TeamAgentSafety, IdempotencyKey: spec.RunID + ":safety", Revision: 1, Deadline: spec.Deadline, BlockedBy: []string{evidenceID}},
 		{TaskID: responseID, Type: "response", OwnerAgentID: TeamAgentResponse, IdempotencyKey: spec.RunID + ":response", Revision: 1, Deadline: spec.Deadline, BlockedBy: []string{safetyID}},
-	}})
+	}
+	switch spec.Path {
+	case "", FixedTeamPathStandard:
+		return NewTaskDAG(TaskDAG{RunID: spec.RunID, Scope: spec.Scope, Tasks: standard})
+	case FixedTeamPathSimple:
+		return NewTaskDAG(TaskDAG{RunID: spec.RunID, Scope: spec.Scope, Tasks: []AgentTask{
+			{TaskID: evidenceID, Type: "evidence", OwnerAgentID: TeamAgentEvidence, IdempotencyKey: spec.RunID + ":evidence", Revision: 1, Deadline: spec.Deadline, Input: cloneJSON(request)},
+			{TaskID: responseID, Type: "response", OwnerAgentID: TeamAgentResponse, IdempotencyKey: spec.RunID + ":response", Revision: 1, Deadline: spec.Deadline, BlockedBy: []string{evidenceID}},
+		}})
+	case FixedTeamPathHuman:
+		return NewTaskDAG(TaskDAG{RunID: spec.RunID, Scope: spec.Scope, Tasks: []AgentTask{
+			{TaskID: triageID, Type: "triage", OwnerAgentID: TeamAgentTriage, IdempotencyKey: spec.RunID + ":triage", Revision: 1, Deadline: spec.Deadline, Input: cloneJSON(request)},
+		}})
+	default:
+		return TaskDAG{}, fmt.Errorf("%w: unknown fixed team path %q", ErrFixedTeam, spec.Path)
+	}
 }
 
 func (c *FixedTeamCoordinator) enqueueReady(ctx context.Context, dag TaskDAG) error {
@@ -195,7 +221,7 @@ func (c *FixedTeamCoordinator) completeFailed(ctx context.Context, scope Metadat
 }
 
 func fixedTeamInput(dag TaskDAG, task AgentTask) (json.RawMessage, error) {
-	if task.Type == "intake" || task.Type == "triage" {
+	if len(task.BlockedBy) == 0 {
 		if !validTaskData(task.Input) {
 			return nil, fmt.Errorf("%w: root task input missing", ErrFixedTeam)
 		}
@@ -222,6 +248,13 @@ func fixedTeamResponse(dag TaskDAG) (ResponseOutput, bool, error) {
 				return ResponseOutput{}, true, fmt.Errorf("%w: response result missing", ErrFixedTeam)
 			}
 			return ResponseOutput{Data: cloneJSON(task.Output)}, true, nil
+		}
+		if task.Type == "triage" && len(dag.Tasks) == 1 && task.Status == TaskSucceeded {
+			data, err := json.Marshal(map[string]json.RawMessage{"requires_human": json.RawMessage("true"), "triage": cloneJSON(task.Output)})
+			if err != nil {
+				return ResponseOutput{}, true, err
+			}
+			return ResponseOutput{Data: data}, true, nil
 		}
 	}
 	return ResponseOutput{}, false, nil
