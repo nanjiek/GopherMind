@@ -1,6 +1,6 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T12:20:00+08:00
+Updated: 2026-09-18T12:24:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p3-step4-http-executor`
@@ -94,7 +94,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - PR #13 is merged: `codex/p3-step1-gateway-routing` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/13.
 - PR #14 is merged: `codex/p3-step2-capability-policy` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/14.
 - PR #15 is merged: `codex/p3-step3-tool-skill-executor` -> `codex/p1-step2-event-surface` at `64107b467b8351e381baeaf696af263398a53ab7`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/15.
-- P3 Step 4 branch is pushed: `codex/p3-step4-http-executor` (implementation commit `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`), pending PR creation against `codex/p1-step2-event-surface`.
+- PR #16 is open: `codex/p3-step4-http-executor` -> `codex/p1-step2-event-surface` (implementation commit `cb368c8e1aa2b5a8acd7c1c7d3ddfe4dd1cca97f`) — https://github.com/nanjiek/GopherMind/pull/16.
 
 ## Validation
 
