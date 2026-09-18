@@ -4,15 +4,17 @@
 
 在可靠 Task Board 和 Durable Mailbox 之上实现实际的、闭合的多 Agent 协作：Lead/Orchestrator 创建唯一固定 DAG，五个固定 worker 通过 Mailbox 领取各自任务，提交结构化结果，依赖成功后才释放下游，最后仅由 Response Agent 产生响应。
 
-固定拓扑为：
+Lead 只接受 P3 的可信路径选择，固定拓扑为：
 
-`Intake` 与 `Triage` → `Evidence` → `Safety` → `Response`
+- `simple`：`Evidence → Response`。
+- `standard`：`Intake` 与 `Triage` → `Evidence` → `Safety` → `Response`。
+- `human_escalation`：只执行 `Triage`，返回结构化 `requires_human`，不启动 Evidence、Safety 或 Response。
 
-它不接受模型或 worker 在运行时创建成员、改变边或选取任意工具。
+它不接受模型或 worker 在运行时创建成员、改变边、选择路径或选取任意工具。
 
 ## 私有输入与结果
 
-- Intake 和 Triage 只接收原始 JSON 请求。
+- Intake、Triage，以及 simple 路径中的 Evidence 只接收原始 JSON 请求。
 - Evidence 只接收 Intake 与 Triage 的结构化输出。
 - Safety 只接收 Evidence 输出。
 - Response 只接收 Safety 输出。
