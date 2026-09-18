@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"gophermind/internal/agent/runtime"
 )
 
 func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
@@ -25,7 +27,7 @@ func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
 
 	var versions int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM schema_migrations").Scan(&versions).Error)
-	require.Equal(t, int64(1), versions)
+	require.Equal(t, int64(2), versions)
 
 	var tables int64
 	require.NoError(t, db.Raw(`
@@ -34,6 +36,51 @@ func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
 		  AND table_name IN ('sessions', 'messages', 'clinical_events', 'projection_checkpoints', 'outbox_messages')
 	`).Scan(&tables).Error)
 	require.Equal(t, int64(5), tables)
+}
+
+func TestWorkflowCheckpointStoreCreatesLoadsAndUsesCAS(t *testing.T) {
+	db, cleanup := isolatedTestSchema(t)
+	defer cleanup()
+	require.NoError(t, ApplyMigrations(context.Background(), db))
+
+	store := NewWorkflowCheckpointStore(db)
+	scope := runtime.Metadata{
+		TenantID: "tenant-a", UserID: "user-a", PatientID: "patient-a",
+		SessionID: "c96e73cf-345e-4eb6-8a05-b9f519799caa", RequestID: "request-a",
+	}
+	require.NoError(t, db.Create(&SessionModel{ID: scope.SessionID, UserID: scope.UserID, Title: "checkpoint test"}).Error)
+	first := runtime.Checkpoint{
+		RunID: "1d9e6479-e9d0-4906-9da8-8b2cd3d7c3cb", Scope: scope,
+		WorkflowID: "fixed-workflow", WorkflowVersion: "v1", Status: runtime.RunRunning,
+		CurrentNode: "evidence", Revision: 1, State: []byte(`{"evidence":"pending"}`),
+	}
+	created, err := store.Create(context.Background(), first)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), created.Revision)
+
+	loaded, err := store.Load(context.Background(), scope, first.RunID)
+	require.NoError(t, err)
+	require.JSONEq(t, string(first.State), string(loaded.State))
+	require.Equal(t, first.CurrentNode, loaded.CurrentNode)
+
+	next := loaded
+	next.Revision = 2
+	next.CurrentNode = "safety"
+	next.State = []byte(`{"evidence":"ready"}`)
+	saved, err := store.Save(context.Background(), 1, next)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), saved.Revision)
+
+	_, err = store.Save(context.Background(), 1, next)
+	require.ErrorIs(t, err, runtime.ErrCheckpointConflict)
+	wrongScope := scope
+	wrongScope.UserID = "user-b"
+	_, err = store.Load(context.Background(), wrongScope, first.RunID)
+	require.ErrorIs(t, err, runtime.ErrCheckpointNotFound)
+
+	var historyCount int64
+	require.NoError(t, db.Raw("SELECT count(*) FROM agent_run_checkpoints WHERE run_id = ?", first.RunID).Scan(&historyCount).Error)
+	require.Equal(t, int64(2), historyCount)
 }
 
 func TestMigrationsRejectUnknownNonEmptySchema(t *testing.T) {

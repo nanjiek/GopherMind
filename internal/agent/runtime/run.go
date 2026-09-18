@@ -451,6 +451,15 @@ func (status RunStatus) waiting() bool {
 	return status == RunWaitingTool || status == RunWaitingAgent || status == RunWaitingUser || status == RunWaitingHuman
 }
 
+func (status RunStatus) valid() bool {
+	switch status {
+	case RunCreated, RunLoadingContext, RunRouting, RunRunning, RunWaitingTool, RunWaitingAgent, RunWaitingUser, RunWaitingHuman, RunValidating, RunCompleted, RunRetryScheduled, RunFailed, RunCancelled, RunExpired:
+		return true
+	default:
+		return false
+	}
+}
+
 func (actionType ActionType) valid() bool {
 	switch actionType {
 	case ActionAskUser, ActionCallSkill, ActionCallTool, ActionDelegateTask, ActionReturnResult, ActionEscalateHuman:
