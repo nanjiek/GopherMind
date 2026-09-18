@@ -1,14 +1,15 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T09:38:19+08:00
+Updated: 2026-09-18T09:40:07+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p1-step2-event-surface`
 P1 node 1 code commit: `eba5a534b42cd4854a9a0816ab1b26b09f564ab6`
+P1 node 2 code commit: `fbad478ef9b0d647241073d1f3844e04b95c2b2c`
 
 ## Objective
 
-Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. P1 is in progress: PostgreSQL is the only relational database, followed by the Event Log/Projection/Surface loop and Redis recovery proof.
+Upgrade GopherMind according to the saved V3 architecture plan. P0 and the core P1 PostgreSQL/Event/Projection/Surface work are complete. The next phase is P2: the minimal Agent Runtime.
 
 ## User decisions and standing constraints
 
@@ -31,7 +32,7 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
   - PostgreSQL integration tests cover repeatable initialization, unknown-schema rejection, incomplete-schema rejection, transactions, uniqueness, and ownership scope;
   - CI now starts PostgreSQL and runs the integration tests.
 - P1 node 1 is committed and pushed in `eba5a53`; PR #7 is open: `codex/p1-step1-postgres-foundation` → `codex/p0-step2-decisions`.
-- P1 node 2 is implemented in the current changeset:
+- P1 node 2 is implemented:
   - typed Event Log and stable P1 event names;
   - session/message facts and Events commit in the same transaction;
   - tenant-scoped idempotent replay and continuous per-session sequence under concurrency;
@@ -40,15 +41,17 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
   - versioned Redis Surface with event waterline validation and PostgreSQL rebuild;
   - real PostgreSQL/Redis tests for replay, concurrency, projection restart, stale cache refresh, and cache deletion recovery.
 - The core P1 acceptance in `docs/design/p1-event-contract.zh.md` is satisfied. Remaining smoke-matrix items belong to later RAG, LangGraph, and mailbox phases.
+- P1 node 2 is committed and pushed in `fbad478`; PR #8 is open: `codex/p1-step2-event-surface` → `codex/p1-step1-postgres-foundation`.
 
 ## Current state
 
-- Working tree: P1 node 2 changes are ready to commit; no unrelated changes were observed.
+- Working tree: clean before this checkpoint metadata update.
 - Current branch is based on P1 node 1 commit `d7b22706bf2163b5459d1c47d3d53e036b76c222`.
 - PR #3 remains open as a draft in the older stack; PRs #4, #5, and #6 are merged.
 - PR #7 is open and mergeable.
+- PR #8 is open; GitHub was still calculating mergeability immediately after creation.
 - Docker Desktop recovered after a transient Ubuntu WSL integration failure.
-- A disposable local PostgreSQL 16 container named `gophermind-p1-postgres` is running on `127.0.0.1:55432` for P1 integration tests.
+- Disposable PostgreSQL and Redis test containers were stopped and removed after validation.
 
 ## Validation
 
@@ -65,9 +68,8 @@ Upgrade GopherMind according to the saved V3 architecture plan. P0 is complete. 
 
 ## Next actions
 
-1. Commit and push P1 node 2, create its PR against `codex/p1-step1-postgres-foundation`, then record the commit and PR here.
-2. Stop and remove the disposable `gophermind-p1-postgres` and `gophermind-p1-redis` containers after node verification.
-3. Begin P2 on a new stacked branch: implement Scope, resource lifecycle/disposers, cancellation, bounded concurrency, and the minimal Run/Action/Observation state machine before wrapping the current single-agent query path.
+1. Re-check PR #8 mergeability and CI before the next node.
+2. Begin P2 on a new stacked branch: implement Scope, resource lifecycle/disposers, cancellation, bounded concurrency, and the minimal Run/Action/Observation state machine before wrapping the current single-agent query path.
 
 ## Blockers and risks
 
