@@ -1,9 +1,9 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T11:44:00+08:00
+Updated: 2026-09-18T12:01:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p3-step3-tool-skill-executor`
+Branch: `codex/p1-step2-event-surface`
 Tool/Skill executor implementation commit: `ff1c4b9eec112313514fc213dc9431a78bc92389`
 
 ## Objective
@@ -84,7 +84,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 - PR #12 is merged: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
 - PR #13 is merged: `codex/p3-step1-gateway-routing` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/13.
 - PR #14 is merged: `codex/p3-step2-capability-policy` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/14.
-- PR #15 is open: `codex/p3-step3-tool-skill-executor` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/15.
+- PR #15 is merged: `codex/p3-step3-tool-skill-executor` -> `codex/p1-step2-event-surface` at `64107b467b8351e381baeaf696af263398a53ab7`; GitHub `go` and `frontend` checks passed before merge — https://github.com/nanjiek/GopherMind/pull/15.
 
 ## Validation
 
@@ -115,9 +115,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P2 are complete. 
 
 ## Next actions
 
-1. Have PR #15 reviewed and merged without widening its scope.
-2. After merge, choose one P3 node: MCP Gateway health/adapter or HTTP integration for a registered constrained executable. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
-3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
+1. Choose one P3 node: MCP Gateway health/adapter or HTTP integration for a registered constrained executable. In either case, authorize again immediately before every external side effect. Keep durable Task DAG/Mailbox and multi-agent workflow work out of P3.
+2. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
 
