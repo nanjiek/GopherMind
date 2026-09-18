@@ -27,7 +27,7 @@ func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
 
 	var versions int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM schema_migrations").Scan(&versions).Error)
-	require.Equal(t, int64(4), versions)
+	require.Equal(t, int64(5), versions)
 
 	var tables int64
 	require.NoError(t, db.Raw(`
@@ -98,7 +98,7 @@ func TestDurableTaskAndMailboxUseCASFencingAndSeparateCompletion(t *testing.T) {
 
 	rootLease, err := tasks.Claim(context.Background(), scope, rootID, 1, "worker-a", time.Minute)
 	require.NoError(t, err)
-	_, err = tasks.Complete(context.Background(), scope, rootID, rootLease.Task.Revision, rootLease.FencingToken, runtime.TaskSucceeded, "")
+	_, err = tasks.Complete(context.Background(), scope, rootID, rootLease.Task.Revision, rootLease.FencingToken, runtime.TaskCompletion{Status: runtime.TaskSucceeded, Output: []byte(`{"intake":"done"}`)})
 	require.NoError(t, err)
 	loaded, err := tasks.Load(context.Background(), scope, runID)
 	require.NoError(t, err)
@@ -110,9 +110,9 @@ func TestDurableTaskAndMailboxUseCASFencingAndSeparateCompletion(t *testing.T) {
 	require.NoError(t, db.Exec("UPDATE agent_tasks SET lease_expires_at = now() - interval '1 second' WHERE id = ?", dependentID).Error)
 	leaseB, err := tasks.Claim(context.Background(), scope, dependentID, leaseA.Task.Revision, "worker-b", time.Minute)
 	require.NoError(t, err)
-	_, err = tasks.Complete(context.Background(), scope, dependentID, leaseA.Task.Revision, leaseA.FencingToken, runtime.TaskSucceeded, "")
+	_, err = tasks.Complete(context.Background(), scope, dependentID, leaseA.Task.Revision, leaseA.FencingToken, runtime.TaskCompletion{Status: runtime.TaskSucceeded, Output: []byte(`{"evidence":"old"}`)})
 	require.ErrorIs(t, err, runtime.ErrTaskDAGConflict)
-	_, err = tasks.Complete(context.Background(), scope, dependentID, leaseB.Task.Revision, leaseB.FencingToken, runtime.TaskSucceeded, "")
+	_, err = tasks.Complete(context.Background(), scope, dependentID, leaseB.Task.Revision, leaseB.FencingToken, runtime.TaskCompletion{Status: runtime.TaskSucceeded, Output: []byte(`{"evidence":"done"}`)})
 	require.NoError(t, err)
 
 	mailbox := NewDurableMailboxStore(db)

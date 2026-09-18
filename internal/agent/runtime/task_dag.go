@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -51,6 +52,8 @@ type AgentTask struct {
 	Status         TaskStatus
 	Revision       int64
 	Deadline       time.Time
+	Input          json.RawMessage
+	Output         json.RawMessage
 }
 
 // TaskDAG is the trusted, scope-bound static task graph for one existing Run.
@@ -73,9 +76,18 @@ type TaskDAGStore interface {
 // through their separately authorized executor boundary.
 type TaskBoard interface {
 	Claim(context.Context, Metadata, string, int64, string, time.Duration) (TaskLease, error)
-	Complete(context.Context, Metadata, string, int64, int64, TaskStatus, string) (AgentTask, error)
+	Complete(context.Context, Metadata, string, int64, int64, TaskCompletion) (AgentTask, error)
 	RecoverExpired(context.Context, Metadata, string, time.Time) (int, error)
 	ExpireBlocked(context.Context, Metadata, string, time.Time) (int, error)
+}
+
+// TaskCompletion is the bounded committed outcome of one leased Task. A
+// successful Task must include a structured output; non-successful tasks carry
+// an error code and never publish an output as a result.
+type TaskCompletion struct {
+	Status    TaskStatus
+	ErrorCode string
+	Output    json.RawMessage
 }
 
 // TaskLease proves a particular worker owns one unexpired Task attempt. The
@@ -130,6 +142,12 @@ func validateTaskDAG(dag TaskDAG, initial bool) (TaskDAG, error) {
 		}
 		if !initial && !task.Status.valid() {
 			return TaskDAG{}, fmt.Errorf("%w: task %q has unknown status", ErrInvalidTaskDAG, task.TaskID)
+		}
+		if len(task.Input) != 0 && !validTaskData(task.Input) {
+			return TaskDAG{}, fmt.Errorf("%w: task %q input must be a JSON object", ErrInvalidTaskDAG, task.TaskID)
+		}
+		if len(task.Output) != 0 && !validTaskData(task.Output) {
+			return TaskDAG{}, fmt.Errorf("%w: task %q output must be a JSON object", ErrInvalidTaskDAG, task.TaskID)
 		}
 		if _, exists := taskByID[task.TaskID]; exists {
 			return TaskDAG{}, fmt.Errorf("%w: duplicate task ID %q", ErrInvalidTaskDAG, task.TaskID)
@@ -206,6 +224,16 @@ func cloneTaskDAG(dag TaskDAG) TaskDAG {
 	for index, task := range dag.Tasks {
 		result.Tasks[index] = task
 		result.Tasks[index].BlockedBy = append([]string(nil), task.BlockedBy...)
+		result.Tasks[index].Input = cloneJSON(task.Input)
+		result.Tasks[index].Output = cloneJSON(task.Output)
 	}
 	return result
+}
+
+func validTaskData(value json.RawMessage) bool {
+	if !json.Valid(value) {
+		return false
+	}
+	var object map[string]json.RawMessage
+	return json.Unmarshal(value, &object) == nil && object != nil
 }

@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const currentSchemaVersion = 4
+const currentSchemaVersion = 5
 
 var requiredTables = []string{
 	"users", "refresh_tokens", "sessions", "messages", "consumer_inbox",
