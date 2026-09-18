@@ -13,12 +13,12 @@ import (
 	"gorm.io/gorm"
 )
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 var requiredTables = []string{
 	"users", "refresh_tokens", "sessions", "messages", "consumer_inbox",
 	"documents", "eval_runs", "mcp_jobs", "memory_records", "event_streams",
-	"clinical_events", "projection_checkpoints", "outbox_messages", "agent_runs", "agent_steps",
+	"clinical_events", "projection_checkpoints", "outbox_messages", "agent_runs", "agent_steps", "agent_run_checkpoints",
 }
 
 //go:embed migrations/*.up.sql
