@@ -9,9 +9,9 @@ import (
 	"gophermind/internal/config"
 )
 
-// NewClusterClient 初始化 Redis Cluster 客户端。
-func NewClusterClient(cfg config.RedisConfig) *redis.ClusterClient {
-	return redis.NewClusterClient(&redis.ClusterOptions{
+// NewClusterClient supports a single Redis endpoint and Redis Cluster.
+func NewClusterClient(cfg config.RedisConfig) redis.UniversalClient {
+	return redis.NewUniversalClient(&redis.UniversalOptions{
 		Addrs:        cfg.Addrs,
 		Username:     cfg.Username,
 		Password:     cfg.Password,
@@ -24,7 +24,7 @@ func NewClusterClient(cfg config.RedisConfig) *redis.ClusterClient {
 }
 
 // Ping 用于探测 Redis 可用性。
-func Ping(ctx context.Context, cli *redis.ClusterClient) error {
+func Ping(ctx context.Context, cli redis.UniversalClient) error {
 	_, err := cli.Ping(ctx).Result()
 	return err
 }

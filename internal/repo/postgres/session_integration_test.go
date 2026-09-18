@@ -25,15 +25,16 @@ func TestSessionRepositoryTransactionsConstraintsAndOwnership(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, messages, 1)
 
-	_, err = repo.CreateSessionWithFirstMessage(context.Background(), "user-a", "Duplicate", "duplicate", "request-1")
-	require.Error(t, err)
+	replayed, err := repo.CreateSessionWithFirstMessage(context.Background(), "user-a", "Duplicate", "duplicate", "request-1")
+	require.NoError(t, err)
+	require.Equal(t, session.ID, replayed.ID)
 	sessions, err := repo.ListSessions(context.Background(), "user-a", 10)
 	require.NoError(t, err)
 	require.Len(t, sessions, 1, "failed message insert must roll back its session")
 
 	require.NoError(t, repo.AppendUserMessage(context.Background(), "user-a", session.ID, "follow-up", "request-2"))
-	require.Error(t, repo.AppendUserMessage(context.Background(), "user-a", session.ID, "duplicate", "request-2"))
+	require.NoError(t, repo.AppendUserMessage(context.Background(), "user-a", session.ID, "duplicate", "request-2"))
 	messages, err = repo.ListMessages(context.Background(), "user-a", session.ID)
 	require.NoError(t, err)
-	require.Len(t, messages, 2, "unique request constraint must prevent a duplicate message")
+	require.Len(t, messages, 2, "idempotent replay must not create a duplicate message")
 }
