@@ -1,10 +1,10 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T10:23:00+08:00
+Updated: 2026-09-18T10:31:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p2-step1-runtime-lifecycle`
-Lifecycle implementation commit: `d34218dfed190d8e244e66a4202495e45e838a94`
+Branch: `codex/p1-step2-event-surface`
+HEAD: `afdb90c340ed69cc4f53cc80bfa5918ca52b1a4b`
 
 ## Objective
 
@@ -28,12 +28,13 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
   - `TaskGroup` bounds active task concurrency, propagates cancellation, and cancels remaining/queued work after the first task error.
   - Focused tests cover metadata/context propagation, LIFO cleanup, initialization rollback, repeated close, first-error cancellation, and concurrency limits.
 - No database schema, migration, query-path, stream-path, or external-service behavior changed in this node.
+- PR #9 merged into `codex/p1-step2-event-surface` at `afdb90c340ed69cc4f53cc80bfa5918ca52b1a4b`; its GitHub `go` and `frontend` checks passed before merge.
 
 ## Current state
 
-- Working tree: no unrelated changes; this checkpoint is the final pending metadata update for the node.
+- Working tree: no unrelated changes before this checkpoint metadata update.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
-- PR #9 is open: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
+- PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 
 ## Validation
 
@@ -46,8 +47,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 
 ## Next actions
 
-1. Have PR #9 reviewed and merged without widening its scope.
-2. After merge, start a separate P2 node for dependency validation, component startup contracts, or the Run/Action/Observation state machine; do not fold it into this PR.
+1. Start a separate P2 Step 2 branch from this updated base for only `ComponentSpec` dependency validation and transactional component startup using the existing Scope primitives.
+2. Keep the Run/Action/Observation state machine, revision/CAS, Hook Pipeline, persistence, and existing service integration out of P2 Step 2.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
