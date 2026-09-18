@@ -11,7 +11,7 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/require"
 
-	mysqlrepo "gophermind/internal/repo/mysql"
+	postgresrepo "gophermind/internal/repo/postgres"
 	"gophermind/pkg/contracts/events"
 )
 
@@ -80,19 +80,19 @@ func (f *fakeInboxRepo) BeginProcess(_ context.Context, _ string, messageID stri
 	if exists {
 		return false, nil
 	}
-	f.seen[messageID] = mysqlrepo.InboxStatusProcessing
+	f.seen[messageID] = postgresrepo.InboxStatusProcessing
 	return true, nil
 }
 func (f *fakeInboxRepo) MarkSucceeded(_ context.Context, _ string, messageID string) error {
-	f.seen[messageID] = mysqlrepo.InboxStatusSucceeded
+	f.seen[messageID] = postgresrepo.InboxStatusSucceeded
 	return nil
 }
 func (f *fakeInboxRepo) MarkFailed(_ context.Context, _ string, messageID string, _ int, _ string) error {
-	f.seen[messageID] = mysqlrepo.InboxStatusFailed
+	f.seen[messageID] = postgresrepo.InboxStatusFailed
 	return nil
 }
 func (f *fakeInboxRepo) MarkDead(_ context.Context, _ string, messageID string, _ int, _ string) error {
-	f.seen[messageID] = mysqlrepo.InboxStatusDead
+	f.seen[messageID] = postgresrepo.InboxStatusDead
 	return nil
 }
 
@@ -160,7 +160,7 @@ func TestConsumer_HandleDelivery_RetryPath(t *testing.T) {
 	err := c.handleDelivery(context.Background(), amqp091.Delivery{Body: raw})
 	require.NoError(t, err)
 	require.Equal(t, 1, producer.retries)
-	require.Equal(t, mysqlrepo.InboxStatusFailed, inboxRepo.seen["r-retry"])
+	require.Equal(t, postgresrepo.InboxStatusFailed, inboxRepo.seen["r-retry"])
 }
 
 func (f *fakeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {

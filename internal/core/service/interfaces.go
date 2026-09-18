@@ -8,7 +8,7 @@ import (
 	"gophermind/pkg/contracts/events"
 )
 
-// SessionRepository 定义 MySQL 存储能力。
+// SessionRepository 定义 Postgres 存储能力。
 type SessionRepository interface {
 	CreateSessionWithFirstMessage(ctx context.Context, userID string, title string, question string, requestID string) (model.Session, error)
 	AppendUserMessage(ctx context.Context, userID string, sessionID string, question string, requestID string) error

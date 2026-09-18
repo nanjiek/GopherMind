@@ -1,4 +1,4 @@
-package mysql
+package postgres
 
 import (
 	"context"
@@ -22,12 +22,12 @@ func NewMCPJobRepository(db *gorm.DB) *MCPJobRepository {
 // Create stores a new MCP job.
 func (r *MCPJobRepository) Create(ctx context.Context, job model.AsyncToolJob) error {
 	return r.db.WithContext(ctx).Create(&MCPJobModel{
-		ID:          job.ID,
-		UserID:      job.UserID,
-		ToolName:    job.ToolName,
-		Status:      job.Status,
-		ResumeToken: job.ResumeToken,
-		Output:      job.Output,
+		ID:           job.ID,
+		UserID:       job.UserID,
+		ToolName:     job.ToolName,
+		Status:       job.Status,
+		ResumeToken:  job.ResumeToken,
+		Output:       job.Output,
 		ErrorMessage: job.ErrorMessage,
 	}).Error
 }

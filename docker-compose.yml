@@ -1,20 +1,19 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: gophermind_mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: gophermind_postgres
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: gophermind
-      MYSQL_USER: gophermind
-      MYSQL_PASSWORD: gophermind
+      POSTGRES_DB: gophermind
+      POSTGRES_USER: gophermind
+      POSTGRES_PASSWORD: gophermind
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"]
+      test: ["CMD-SHELL", "pg_isready -U gophermind -d gophermind"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -105,7 +104,7 @@ services:
       - "9090:9090"
     environment:
       HTTP_ADDR: ":9090"
-      MYSQL_DSN: root:root@tcp(mysql:3306)/gophermind?charset=utf8mb4&parseTime=True&loc=Local
+      POSTGRES_DSN: postgres://gophermind:gophermind@postgres:5432/gophermind?sslmode=disable
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       REDIS_ADDRS: redis:6379
       RAG_PYTHON_URL: ${RAG_PYTHON_URL:-http://host.docker.internal:8000}
@@ -127,10 +126,11 @@ services:
     command: >
       sh -c "
         go mod tidy &&
-        go run ./cmd/server/main.go
+        go run ./cmd/migrate &&
+        go run ./cmd/server
       "
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -219,7 +219,7 @@ networks:
     driver: bridge
 
 volumes:
-  mysql_data:
+  postgres_data:
   redis_data:
   qdrant_data:
   prometheus_data:

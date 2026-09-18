@@ -1,11 +1,11 @@
-package mysql
+package postgres
 
 import (
 	"context"
 	"errors"
 	"time"
 
-	mysqlDriver "github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -120,9 +120,9 @@ func (r *InboxRepository) MarkDead(ctx context.Context, consumer string, message
 }
 
 func isDuplicateKeyError(err error) bool {
-	var mysqlErr *mysqlDriver.MySQLError
-	if errors.As(err, &mysqlErr) {
-		return mysqlErr.Number == 1062
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
 	}
 	return false
 }

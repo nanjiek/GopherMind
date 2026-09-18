@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -194,7 +195,7 @@ func (h *StreamHandler) waitForDocumentReady(ctx context.Context, userID string,
 		return true, doc.JobID, contextDeadlineExceeded
 	}
 	if ready.Status == "failed" {
-		return true, ready.JobID, fmt.Errorf(ready.ErrorMessage)
+		return true, ready.JobID, errors.New(ready.ErrorMessage)
 	}
 	return true, ready.JobID, nil
 }
