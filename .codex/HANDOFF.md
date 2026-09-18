@@ -1,20 +1,20 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T11:12:00+08:00
+Updated: 2026-09-18T11:15:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p2-step4-runtime-completion`
-P2 completion implementation commit: `6982eeb7bf25790a6280a58069865b4136fddcd2`
+Branch: `codex/p1-step2-event-surface`
+HEAD: `73f71b0e06bdec73a15c385b9a1e0784ffe06c5f`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. This branch completes P2's in-process runtime contract; durable persistence and further capability integration begin in P3/P4.
+Upgrade GopherMind according to the V3 architecture plan. P0, P1, and P2 are complete. The next phase is P3 Gateway and capability governance; durable collaboration begins later in P4.
 
 ## User decisions and standing constraints
 
 - Use a fresh PostgreSQL database. Old MySQL data is invalid; do not implement migration, dual writes, CDC, backfill, or reconciliation.
 - Complete one reviewable node at a time; each completed node updates this checkpoint, is committed, pushed, and submitted as a GitHub PR.
-- P2 completion includes only in-process revision/CAS, failure/progress controls, Hook Pipeline, and a minimal synchronous QueryService wrapper. Do not add PostgreSQL Run persistence, Event Log writes, or streaming integration.
+- P2 completed only in-process revision/CAS, failure/progress controls, Hook Pipeline, and a minimal synchronous QueryService wrapper. PostgreSQL Run persistence, Event Log writes, and streaming integration remain explicitly deferred.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
 ## Completed
@@ -50,15 +50,16 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
   - `Pipeline` provides ordered Before/reverse After hooks, rejection, error propagation, and Scope-bound automatic unregistration. `Controller` applies the pipeline around Run mutations.
   - The existing synchronous `QueryService` now executes its existing model call and final answer through the minimal in-memory single-agent Runtime protocol, without changing its external API or persisting Run records.
 - No PostgreSQL Run schema, revision persistence, Event Log writes, StreamService integration, or new external dependency is introduced by P2 Step 4.
+- PR #12 merged into `codex/p1-step2-event-surface` at `73f71b0e06bdec73a15c385b9a1e0784ffe06c5f`; GitHub `go` and `frontend` checks passed before merge. P2 is complete at this commit.
 
 ## Current state
 
-- Working tree: clean after P2 completion commits were pushed.
+- Working tree: no unrelated changes before this checkpoint metadata update.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
 - PR #11 is merged: `codex/p2-step3-run-state-machine` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/11.
-- PR #12 is open: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
+- PR #12 is merged: `codex/p2-step4-runtime-completion` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/12.
 
 ## Validation
 
@@ -77,8 +78,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 
 ## Next actions
 
-1. Have PR #12 reviewed and merged without widening its scope.
-2. After merge, begin P3 as a separate node for model/workflow routing, Capability policy, or a constrained Skill/MCP execution path; do not add durable Task DAG/Mailbox work yet.
+1. Start P3 on a new branch from this head with exactly one Gateway subnode: model/workflow routing, Capability policy, or a constrained Skill/MCP execution path.
+2. Keep PostgreSQL Run persistence, durable Task DAG/Mailbox, and multi-agent workflow work out of the first P3 subnode.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
