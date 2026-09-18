@@ -1,20 +1,20 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T10:41:00+08:00
+Updated: 2026-09-18T10:49:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
-Branch: `codex/p1-step2-event-surface`
-HEAD: `55baae147517ad0a30b1d71faf59d91a586db02d`
+Branch: `codex/p2-step3-run-state-machine`
+Run state-machine implementation commit: `0e90d678a0e1973ae62a4665e645869cd2545a0e`
 
 ## Objective
 
-Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. P2 Steps 1 and 2 provide lifecycle and transactional component startup foundations; later P2 nodes retain Run/Action/Observation, revision/CAS, Hook Pipeline, persistence, and service integration.
+Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. P2 Steps 1–3 provide lifecycle, component startup, and an in-memory Run/Action/Observation protocol; revision/CAS, Hook Pipeline, persistence, and service integration remain later nodes.
 
 ## User decisions and standing constraints
 
 - Use a fresh PostgreSQL database. Old MySQL data is invalid; do not implement migration, dual writes, CDC, backfill, or reconciliation.
 - Complete one reviewable node at a time; each completed node updates this checkpoint, is committed, pushed, and submitted as a GitHub PR.
-- Keep P2 Step 2 limited to `internal/agent/runtime` component dependency validation and startup. Do not add the Run state machine, Action/Observation protocol, revision/CAS, Hook Pipeline, PostgreSQL persistence, or QueryService/StreamService integration.
+- Keep P2 Step 3 limited to the in-memory `internal/agent/runtime` Run/Action/Observation state machine. Do not add revision/CAS, Hook Pipeline, PostgreSQL persistence, or QueryService/StreamService integration.
 - Preserve unrelated work and exclude secrets, local `.env`, caches, and temporary output.
 
 ## Completed
@@ -36,13 +36,21 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
   - Tests cover dependency ordering, unavailable dependencies, duplicate providers, and startup rollback.
 - No database schema, migration, query-path, stream-path, state machine, or external-service behavior changed in P2 Step 2.
 - PR #10 merged into `codex/p1-step2-event-surface` at `55baae147517ad0a30b1d71faf59d91a586db02d`; its GitHub `go` and `frontend` checks passed before merge.
+- P2 Step 3 Run/Action/Observation state machine is committed in `0e90d678a0e1973ae62a4665e645869cd2545a0e`:
+  - Run states cover `created`, context loading, routing, running, all four wait states, validating, completion, retry, failure, cancellation, and expiry.
+  - Structured actions are restricted to the six V3 action types and deterministically enter their matching wait/validation state; an observation for the pending action resumes the run.
+  - Terminal states reject further transitions, actions, and observations; maximum step count and JSON payload shape are validated.
+  - State and snapshots are mutex-protected and snapshot JSON buffers are copied; this node has no revision/CAS or persistence contract.
+  - Tests cover success, all action wait-state mappings, observation resume, invalid transitions/observations, maximum steps, and terminal failure behavior.
+- No database schema, migration, query-path, stream-path, Hook Pipeline, revision/CAS, or external-service behavior changed in P2 Step 3.
 
 ## Current state
 
-- Working tree: no unrelated changes before this checkpoint metadata update.
+- Working tree: expected clean after this checkpoint update is committed; run state-machine code is ahead of `origin/codex/p1-step2-event-surface`.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
+- P2 Step 3 has no PR yet; it must use `codex/p1-step2-event-surface` as its base.
 
 ## Validation
 
@@ -51,13 +59,14 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 - `go build ./cmd/...` — passed.
 - `go vet ./...` — passed.
 - `go test ./internal/agent/runtime -count=20` — passed after P2 Step 2.
+- `go test ./internal/agent/runtime -count=20` — passed after P2 Step 3.
 - `git diff --check` — passed before the lifecycle commit.
 - `go test -race ./internal/agent/runtime` — not runnable in this workstation environment: Go reports `-race requires cgo; enable cgo by setting CGO_ENABLED=1`; `go env` reports `CGO_ENABLED=0` and no `gcc`, `clang`, or `cl` executable is installed. No toolchain installation was attempted because it is outside this node's scope.
 
 ## Next actions
 
-1. Define and implement the next P2 node as a separate branch; choose exactly one of the Run/Action/Observation state machine, revision/CAS, or Hook Pipeline rather than combining them.
-2. Keep persistence and existing service integration separate until the selected runtime contract has focused tests.
+1. Commit this refreshed checkpoint, push `codex/p2-step3-run-state-machine`, and create its PR against `codex/p1-step2-event-surface`.
+2. Keep revision/CAS, Hook Pipeline, persistence, and existing service integration out of this PR.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
@@ -70,6 +79,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 - `internal/agent/runtime/scope.go` — scope metadata/context lifecycle, disposer stack, and initialization rollback.
 - `internal/agent/runtime/group.go` — bounded cancellation-aware task group.
 - `internal/agent/runtime/component.go` — ComponentSpec validation, dependency resolution, and transactional startup.
+- `internal/agent/runtime/run.go` — in-memory Run/Action/Observation state machine and protocol validation.
 - `internal/agent/runtime/*_test.go` — focused lifecycle tests.
 - `docs/ai-architecture-v3.zh.md` — original Scope and lifecycle design rationale.
 - `docs/ai-upgrade-plan-v3.zh.md` — P2 boundaries and acceptance plan.
