@@ -1,6 +1,6 @@
 # GopherMind project handoff
 
-Updated: 2026-09-18T10:20:58+08:00
+Updated: 2026-09-18T10:23:00+08:00
 Workspace: `C:\Users\Huangsirui\OneDrive\Desktop\GopherMind`
 Repository: `nanjiek/GopherMind`
 Branch: `codex/p2-step1-runtime-lifecycle`
@@ -31,9 +31,9 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 
 ## Current state
 
-- Working tree: expected clean after this checkpoint update is committed; lifecycle code commit is ahead of `origin/codex/p1-step2-event-surface`.
+- Working tree: clean after commits `d34218d` and `8adeaa3` were pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
-- The P2 branch must be pushed and its PR created with base `codex/p1-step2-event-surface`, so post-merge P1 checkpoint commits remain outside the P2 diff.
+- PR #9 is open: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 
 ## Validation
 
@@ -46,8 +46,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0 and P1 are merged. 
 
 ## Next actions
 
-1. Commit this refreshed checkpoint, push `codex/p2-step1-runtime-lifecycle`, and create the authorized PR against `codex/p1-step2-event-surface`.
-2. After review/merge, start a separate P2 node for dependency validation, component startup contracts, or the Run/Action/Observation state machine; do not fold it into this PR.
+1. Have PR #9 reviewed and merged without widening its scope.
+2. After merge, start a separate P2 node for dependency validation, component startup contracts, or the Run/Action/Observation state machine; do not fold it into this PR.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
