@@ -9,7 +9,7 @@ import (
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		reqID := c.GetHeader("X-Request-ID")
-		if reqID == "" {
+		if _, err := uuid.Parse(reqID); err != nil {
 			reqID = uuid.NewString()
 		}
 		c.Set("request_id", reqID)

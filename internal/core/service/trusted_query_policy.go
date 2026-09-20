@@ -125,7 +125,7 @@ func (p *TrustedQueryPolicy) Build(in TrustedQueryPolicyInput) (RoutedTeamQueryI
 	}
 	return RoutedTeamQueryInput{
 		RunID:    in.RunID,
-		Scope:    runtime.Metadata{TenantID: in.Identity.TenantID, UserID: in.Identity.UserID, SessionID: in.Identity.SessionID},
+		Scope:    runtime.Metadata{TenantID: in.Identity.TenantID, UserID: in.Identity.UserID, SessionID: in.Identity.SessionID, RunID: in.RunID},
 		Deadline: in.Deadline,
 		Route:    winner.Route,
 		Payload:  payload,

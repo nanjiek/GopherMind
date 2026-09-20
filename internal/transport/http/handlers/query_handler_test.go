@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
+	"gophermind/internal/agent/runtime"
 	"gophermind/internal/core/model"
 	"gophermind/internal/core/service"
 	"gophermind/pkg/contracts/events"
@@ -130,6 +131,42 @@ func TestQueryHandler_Handle(t *testing.T) {
 	var resp httpcontracts.APIResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Equal(t, 50321, resp.Code)
+}
+
+type handlerCommittedReader struct {
+	response service.CommittedTeamResponse
+	scope    runtime.Metadata
+	runID    string
+}
+
+func (r *handlerCommittedReader) LoadCommittedResponse(_ context.Context, scope runtime.Metadata, runID string) (service.CommittedTeamResponse, int64, error) {
+	r.scope, r.runID = scope, runID
+	return r.response, 1, nil
+}
+
+func TestCommittedResponseHandler_ReplaysOnlyScopedCommittedData(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reader := &handlerCommittedReader{response: service.CommittedTeamResponse{RunID: "8ba75bdd-8306-4ee0-8e1d-b1303232687f", Data: json.RawMessage(`{"answer":"reviewed"}`)}}
+	handler := NewCommittedResponseHandler(&service.TeamQueryApplication{Reader: reader}, "tenant-1", nil)
+	r := gin.New()
+	r.GET("/query/:run/replay", func(c *gin.Context) {
+		c.Set("user_id", "u1")
+		handler.Handle(c)
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/query/8ba75bdd-8306-4ee0-8e1d-b1303232687f/replay?session_id=s1", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, runtime.Metadata{TenantID: "tenant-1", UserID: "u1", SessionID: "s1"}, reader.scope)
+	require.Equal(t, "8ba75bdd-8306-4ee0-8e1d-b1303232687f", reader.runID)
+	var response struct {
+		Data struct {
+			Response struct {
+				Answer string `json:"answer"`
+			} `json:"response"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "reviewed", response.Data.Response.Answer)
 }
 
 func (f *handlerFakeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {

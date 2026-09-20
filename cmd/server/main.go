@@ -19,7 +19,6 @@ import (
 	metricspkg "gophermind/internal/obs/metrics"
 	otelpkg "gophermind/internal/obs/otel"
 	"gophermind/internal/queue/rabbitmq"
-	ragclient "gophermind/internal/rag/client"
 	postgresrepo "gophermind/internal/repo/postgres"
 	redisrepo "gophermind/internal/repo/redis"
 	"gophermind/internal/security/secret"
@@ -81,23 +80,26 @@ func main() {
 	bgeProvider := providers.NewBGEProvider(cfg.Model, logg)
 	modelRouter := factory.NewModelFactory(openaiProvider, kimiProvider, qwenProvider, ollamaProvider, bgeProvider, logg)
 
-	rag := ragclient.NewPythonClient(cfg.RAG, logg)
 	tokenManager := token.NewManager(cfg.Auth)
 	authService := service.NewAuthService(authRepo, tokenManager)
 	attachmentService := service.NewAttachmentService(cfg.Upload, logg)
 	sessionService := service.NewSessionService(sessionRepo, cache, logg)
-	// Optional memory, tracing and judge services are not enabled in this baseline.
-	queryService := service.NewQueryService(sessionRepo, sessionService, modelRouter, rag, producer, cache, nil, nil, nil, logg)
-	streamService := service.NewStreamService(sessionRepo, sessionService, modelRouter, rag, cache, nil, nil, nil, logg)
+	// QueryService and StreamService remain legacy-only compatibility types.
+	// The production HTTP server intentionally does not construct them: P5
+	// serves queries exclusively through the trusted fixed Team application.
+	teamQuery, err := buildTeamQueryApplication(cfg.TeamQuery, db, modelRouter)
+	if err != nil {
+		logg.Fatal("configure trusted team query", zap.Error(err))
+	}
 
-	router := httptransport.NewRouter(
+	router := httptransport.NewRouterWithTeam(
 		cfg,
 		logg,
 		authService,
 		attachmentService,
-		queryService,
 		sessionService,
-		streamService,
+		teamQuery,
+		cfg.TeamQuery.TenantID,
 	)
 
 	server := &http.Server{

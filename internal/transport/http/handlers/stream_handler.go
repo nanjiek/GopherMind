@@ -43,6 +43,10 @@ func NewStreamHandler(svc *service.StreamService, documents *service.DocumentSer
 
 // Handle dispatches SSE or WebSocket streaming.
 func (h *StreamHandler) Handle(c *gin.Context) {
+	if h == nil || h.svc == nil {
+		c.JSON(http.StatusServiceUnavailable, httpcontracts.Err(50322, "legacy streaming query path unavailable"))
+		return
+	}
 	if websocket.IsWebSocketUpgrade(c.Request) {
 		h.handleWS(c)
 		return

@@ -35,6 +35,12 @@ func (r *FixedTeamRuntime) Start(ctx context.Context, spec runtime.FixedTeamSpec
 	if r == nil || r.coordinator == nil || r.checkpoints == nil {
 		return runtime.ResponseOutput{}, errors.New("fixed team runtime is nil")
 	}
+	// The request Run ID is part of every worker scope. This prevents a
+	// capability authorization or audit record from becoming detached from the
+	// immutable Run created below.
+	if spec.Scope.RunID == "" {
+		spec.Scope.RunID = spec.RunID
+	}
 	requestScope := runtime.NewScope(ctx, spec.Scope)
 	defer requestScope.Close(context.Background())
 	_, err := r.checkpoints.Create(requestScope.Context(), runtime.Checkpoint{RunID: spec.RunID, Scope: spec.Scope, WorkflowID: "fixed-team", WorkflowVersion: "v1", Status: runtime.RunRunning, Revision: 1, State: json.RawMessage(`{}`)})

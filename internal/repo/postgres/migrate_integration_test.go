@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"gophermind/internal/agent/runtime"
+	"gophermind/internal/core/service"
 )
 
 func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
@@ -27,15 +28,15 @@ func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
 
 	var versions int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM schema_migrations").Scan(&versions).Error)
-	require.Equal(t, int64(5), versions)
+	require.Equal(t, int64(7), versions)
 
 	var tables int64
 	require.NoError(t, db.Raw(`
 		SELECT count(*) FROM information_schema.tables
 		WHERE table_schema = current_schema()
-		  AND table_name IN ('sessions', 'messages', 'clinical_events', 'projection_checkpoints', 'outbox_messages')
+		  AND table_name IN ('sessions', 'messages', 'clinical_events', 'projection_checkpoints', 'outbox_messages', 'session_compactions')
 	`).Scan(&tables).Error)
-	require.Equal(t, int64(5), tables)
+	require.Equal(t, int64(6), tables)
 }
 
 func TestTaskDAGStoreCreatesLoadsAndScopesStaticGraph(t *testing.T) {
@@ -184,6 +185,30 @@ func TestWorkflowCheckpointStoreCreatesLoadsAndUsesCAS(t *testing.T) {
 	var historyCount int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM agent_run_checkpoints WHERE run_id = ?", first.RunID).Scan(&historyCount).Error)
 	require.Equal(t, int64(2), historyCount)
+}
+
+func TestCommittedResponseAndOutboxAreCreatedTogether(t *testing.T) {
+	db, cleanup := isolatedTestSchema(t)
+	defer cleanup()
+	require.NoError(t, ApplyMigrations(context.Background(), db))
+
+	scope := runtime.Metadata{TenantID: "tenant-a", UserID: "user-a"}
+	runID := "6ce25317-9191-4b46-9278-bd0efa6c77b2"
+	_, err := NewWorkflowCheckpointStore(db).Create(context.Background(), runtime.Checkpoint{
+		RunID: runID, Scope: scope, WorkflowID: "fixed-team", WorkflowVersion: "v1", Status: runtime.RunRunning, Revision: 1, State: []byte(`{}`),
+	})
+	require.NoError(t, err)
+
+	committer := NewCommittedResponseOutboxCommitter(db)
+	require.NoError(t, committer.CommitReviewedResponse(context.Background(), service.CommittedTeamResponse{RunID: runID, Scope: scope, Data: []byte(`{"answer":"reviewed"}`)}))
+
+	stored, seq, err := NewCommittedResponseStore(db).LoadCommittedResponse(context.Background(), scope, runID)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), seq)
+	require.JSONEq(t, `{"answer":"reviewed"}`, string(stored.Data))
+	var outboxCount int64
+	require.NoError(t, db.Raw("SELECT count(*) FROM outbox_messages WHERE operation_id = ?", runID+":response").Scan(&outboxCount).Error)
+	require.Equal(t, int64(1), outboxCount)
 }
 
 func TestMigrationsRejectUnknownNonEmptySchema(t *testing.T) {

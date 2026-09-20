@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"gophermind/internal/agent/runtime"
+	"gophermind/internal/core/service"
 )
 
 var ErrResponseOutboxConflict = errors.New("response outbox operation conflicts")
@@ -28,6 +29,51 @@ type ResponseOutboxMessage struct {
 	Scope       runtime.Metadata
 	Topic       string
 	Payload     json.RawMessage
+}
+
+// CommittedResponseOutboxCommitter is the production P5 committer. It creates
+// the immutable response and its stable publish intent in one transaction, so
+// a process crash cannot leave one without the other.
+type CommittedResponseOutboxCommitter struct{ db *gorm.DB }
+
+var _ service.ReviewedResponseCommitter = (*CommittedResponseOutboxCommitter)(nil)
+
+func NewCommittedResponseOutboxCommitter(db *gorm.DB) *CommittedResponseOutboxCommitter {
+	return &CommittedResponseOutboxCommitter{db: db}
+}
+
+func (c *CommittedResponseOutboxCommitter) CommitReviewedResponse(ctx context.Context, response service.CommittedTeamResponse) error {
+	if c == nil || c.db == nil {
+		return errors.New("committed response outbox committer is nil")
+	}
+	if err := validateCommittedResponse(response); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	return c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := checkpointScopeQuery(tx.Model(&workflowRunRow{}), response.Scope, response.RunID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 1 {
+			return runtime.ErrTaskDAGNotFound
+		}
+		committed := committedResponseRow{RunID: response.RunID, GenerationID: response.RunID, Data: append(json.RawMessage(nil), response.Data...), EventSeq: 1, Revision: 1, CommittedAt: now}
+		if err := tx.Create(&committed).Error; err != nil {
+			if isPostgresUniqueViolation(err) {
+				return ErrCommittedResponseConflict
+			}
+			return err
+		}
+		outbox := outboxRow{ID: uuid.NewString(), OperationID: response.RunID + ":response", Topic: "team.response.committed", Payload: append(json.RawMessage(nil), response.Data...), Status: "pending", CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&outbox).Error; err != nil {
+			if isPostgresUniqueViolation(err) {
+				return ErrResponseOutboxConflict
+			}
+			return err
+		}
+		return nil
+	})
 }
 
 type outboxRow struct {

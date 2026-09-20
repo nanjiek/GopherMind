@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+
+	"gophermind/internal/agent/runtime"
 )
 
 // TeamQueryApplication is the one-way P5 application boundary. It is usable
@@ -12,6 +14,13 @@ type TeamQueryApplication struct {
 	Policy  *TrustedQueryPolicy
 	Team    *RoutedTeamQueryService
 	Barrier *ResponseCommitBarrier
+	Reader  CommittedResponseReader
+}
+
+// CommittedResponseReader is deliberately read-only. Replay is never allowed
+// to run a Team worker, call a model, or cause a Tool effect.
+type CommittedResponseReader interface {
+	LoadCommittedResponse(context.Context, runtime.Metadata, string) (CommittedTeamResponse, int64, error)
 }
 
 type TeamQueryApplicationOutput struct {
@@ -38,4 +47,12 @@ func (a *TeamQueryApplication) Execute(ctx context.Context, input TrustedQueryPo
 		return TeamQueryApplicationOutput{}, err
 	}
 	return TeamQueryApplicationOutput{Data: append([]byte(nil), result.Data...)}, nil
+}
+
+// Replay returns only the response that passed the Safety and commit barriers.
+func (a *TeamQueryApplication) Replay(ctx context.Context, scope runtime.Metadata, runID string) (CommittedTeamResponse, int64, error) {
+	if a == nil || a.Reader == nil {
+		return CommittedTeamResponse{}, 0, fmt.Errorf("team query replay reader is unavailable")
+	}
+	return a.Reader.LoadCommittedResponse(ctx, scope, runID)
 }

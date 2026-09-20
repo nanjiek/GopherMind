@@ -33,13 +33,11 @@ func NewRouterWithTeam(
 	logger *zap.Logger,
 	authService *service.AuthService,
 	attachmentService *service.AttachmentService,
-	queryService *service.QueryService,
 	sessionService *service.SessionService,
-	streamService *service.StreamService,
 	team *service.TeamQueryApplication,
 	tenantID string,
 ) *gin.Engine {
-	return newRouter(cfg, logger, authService, attachmentService, queryService, sessionService, streamService, team, tenantID)
+	return newRouter(cfg, logger, authService, attachmentService, nil, sessionService, nil, team, tenantID)
 }
 
 func newRouter(
@@ -71,7 +69,11 @@ func newRouter(
 	// fails closed instead of directly calling a model and publishing a reply.
 	qh := handlers.NewQueryHandler(team, tenantID, cfg.HTTP.WriteTimeout, nil, logger)
 	sh := handlers.NewSessionHandler(sessionService, logger)
-	sth := handlers.NewStreamHandler(streamService, nil, cfg.RAG.DocumentWaitReadyTimeout, logger)
+	// P5 has no approved streaming Team protocol yet. Keep the public legacy
+	// stream route fail-closed rather than leave a direct model bypass beside
+	// the committed Team query path.
+	sth := handlers.NewStreamHandler(nil, nil, cfg.RAG.DocumentWaitReadyTimeout, logger)
+	rh := handlers.NewCommittedResponseHandler(team, tenantID, logger)
 	atth := handlers.NewAttachmentHandler(attachmentService, logger)
 
 	public := r.Group("/auth")
@@ -86,6 +88,7 @@ func newRouter(
 	api.Use(authMW)
 	{
 		api.POST("/query", qh.Handle)
+		api.GET("/query/:run/replay", rh.Handle)
 		api.GET("/sessions", sh.ListSessions)
 		api.GET("/session/:id", sh.GetSession)
 		api.GET("/stream/:session", sth.Handle)
