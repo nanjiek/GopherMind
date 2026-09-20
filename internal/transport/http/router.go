@@ -18,9 +18,40 @@ func NewRouter(
 	logger *zap.Logger,
 	authService *service.AuthService,
 	attachmentService *service.AttachmentService,
-	_ *service.QueryService,
+	queryService *service.QueryService,
 	sessionService *service.SessionService,
 	streamService *service.StreamService,
+) *gin.Engine {
+	return newRouter(cfg, logger, authService, attachmentService, queryService, sessionService, streamService, nil, "")
+}
+
+// NewRouterWithTeam exposes the only public /query activation path. Callers
+// must supply a fully configured P5 Team application and its trusted tenant;
+// passing nil still fails closed and never enables the legacy query service.
+func NewRouterWithTeam(
+	cfg config.Config,
+	logger *zap.Logger,
+	authService *service.AuthService,
+	attachmentService *service.AttachmentService,
+	queryService *service.QueryService,
+	sessionService *service.SessionService,
+	streamService *service.StreamService,
+	team *service.TeamQueryApplication,
+	tenantID string,
+) *gin.Engine {
+	return newRouter(cfg, logger, authService, attachmentService, queryService, sessionService, streamService, team, tenantID)
+}
+
+func newRouter(
+	cfg config.Config,
+	logger *zap.Logger,
+	authService *service.AuthService,
+	attachmentService *service.AttachmentService,
+	queryService *service.QueryService,
+	sessionService *service.SessionService,
+	streamService *service.StreamService,
+	team *service.TeamQueryApplication,
+	tenantID string,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -38,7 +69,7 @@ func NewRouter(
 	// The legacy QueryService is deliberately not a public HTTP fallback.
 	// P5 wiring injects a configured Team application here; until then /query
 	// fails closed instead of directly calling a model and publishing a reply.
-	qh := handlers.NewQueryHandler(nil, "", 0, nil, logger)
+	qh := handlers.NewQueryHandler(team, tenantID, cfg.HTTP.WriteTimeout, nil, logger)
 	sh := handlers.NewSessionHandler(sessionService, logger)
 	sth := handlers.NewStreamHandler(streamService, nil, cfg.RAG.DocumentWaitReadyTimeout, logger)
 	atth := handlers.NewAttachmentHandler(attachmentService, logger)
