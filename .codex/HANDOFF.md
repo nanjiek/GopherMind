@@ -122,12 +122,12 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P4 Step 4 static workflow recovery is committed in `5317b104c99846c7de75d89af2ca68b8bceafa4c`: `StaticWorkflowRecoveryRunner` saves every completed fixed pure node by checkpoint CAS and resumes from the stored next node; tests prove recovery at Evidence skips Intake/routing and failures persist a failed checkpoint. No external side effect, Task DAG/Mailbox, lease/fencing, queue semantics, LangGraph integration, old-MySQL migration, dual write, CDC, or backfill changed.
 - P4 Step 5 durable Task/DAG minimum contract is committed in `e75a6e7556e91ef2c515f699005dbfa7cedabda2`: trusted Run-bound task identity, static dependency validation, cycle rejection, and PostgreSQL task/edge tables. `TaskDAGStore` persists or loads a whole validated graph only through exact trusted scope; roots are `ready`, dependent tasks are `blocked`.
 - P4 reliable coordination is committed in `d8d32ae193501118c3ef0dfb589be5703c3560d3`: Task state CAS, deadline expiry, lease/fencing, durable Mailbox, at-least-once logical queue delivery, and restart recovery. Task success remains the only completion authority; Mailbox acknowledgement only records delivery. The implementation deliberately has no actual worker execution, dynamic delegation, external broker, connection recovery, LangGraph SDK claim, or external side effect.
-- P4 final fixed multi-Agent execution is implemented on `codex/p4-final-fixed-team-execution` pending the #23 merge: Lead chooses only trusted static `simple` (Evidence → Response), `standard` (Intake/Triage → Evidence → Safety → Response), or `human_escalation` (Triage only) DAGs; pure fixed workers claim Task/Mailbox work, receive only dependency-allowed structured data, persist results, and resume without re-executing succeeded Tasks. No model-driven delegation, external effect, or dynamic topology is introduced.
+- P4 final fixed multi-Agent execution is committed in `c6ee132` and submitted as PR #24: Lead chooses only trusted static `simple` (Evidence → Response), `standard` (Intake/Triage → Evidence → Safety → Response), or `human_escalation` (Triage only) DAGs; pure fixed workers claim Task/Mailbox work, receive only dependency-allowed structured data, persist results, and resume without re-executing succeeded Tasks. No model-driven delegation, external effect, or dynamic topology is introduced.
 - The P5–P7 plan is revised in `docs/ai-upgrade-plan-v3.zh.md`: P5 first connects trusted routing, fixed Team execution, safe response commit/replay, Durable Action/Event-Outbox and its database/race gates; Compaction follows that live execution boundary. P6 remains authority-first memory/knowledge governance. P7 retains capacity, evaluation and release governance rather than deferring basic correctness tests.
 
 ## Current state
 
-- Working tree: clean after the P4 reliable-coordination contract is committed and pushed.
+- Working tree: clean after the final P4 Fixed Team PR is committed and pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -143,7 +143,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #20 is merged: `codex/p4-step3-workflow-checkpoint` -> `codex/p1-step2-event-surface` at `ac7d8709c7abe1a103e4f6ead2064537162ca3e6`; GitHub `go` and `frontend` checks passed after checkpoint test fixes — https://github.com/nanjiek/GopherMind/pull/20.
 - PR #21 is merged: `codex/p4-step4-static-workflow-recovery` -> `codex/p1-step2-event-surface` at `340ab3608edf9abd402f2f8e502ef1b1dbcd4ae8` — https://github.com/nanjiek/GopherMind/pull/21.
 - PR #22 is merged: `codex/p4-step5-task-dag-contract` -> `codex/p1-step2-event-surface` at `69020192e88b561e568406127db7fe1627bce100`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/22.
-- PR #23 is open: `codex/p4-complete-reliable-coordination` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/23.
+- PR #23 is merged: `codex/p4-complete-reliable-coordination` -> `codex/p1-step2-event-surface` at `9a2ba1ceb6e26eb01da97cae448d16e583d091ab`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/23.
+- PR #24 is open: `codex/p4-final-fixed-team-execution` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/24.
 
 ## Validation
 
@@ -200,8 +201,8 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Next actions
 
-1. Merge PR #23 (checks passed), rebase `codex/p4-final-fixed-team-execution` onto `codex/p1-step2-event-surface`, and create the final P4 PR.
-2. Evaluate the implemented Agent architecture against the original V3 plan before selecting P5 work.
+1. Review and merge PR #24 after its required GitHub checks pass; P4 is complete at that merge.
+2. Start P5.1 after P4 merges: connect trusted P3 routing to the fixed Team path selection and the Query/API entry.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
