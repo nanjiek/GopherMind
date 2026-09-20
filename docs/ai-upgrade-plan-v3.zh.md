@@ -86,6 +86,8 @@
 
 ### P5：执行主链接通、Compaction 与安全输出恢复（调整后阶段五）
 
+实现状态（2026-09-21）：P5 的固定 Team 主链、Safety 提交屏障、原子 committed-response/Outbox、范围化只读回放和 Event-watermark Compaction/CAS 均已实现。公共旧 `/query` 与 `/stream` 直连路径已 fail closed；P5 不在审核前流式泄露草稿。部署启用与边界见 `docs/p5-complete-execution-boundary.zh.md`。本机 `go test -race` 仍受缺少 CGO/C 工具链阻塞，不能据此宣称 race 门禁完成。
+
 P5 的前置条件是 P4 的固定多 Agent Team 已合并：可信 P3 路由决定且只决定 `simple`、`standard`、`human_escalation` 三条预定义 Team 路径；模型、worker 或请求 payload 均不能修改拓扑。
 
 - 将 P3 Router 实际接到 P4 FixedTeamPath、Query/API 入口和结构化人工接管事件。红旗路径停止普通下游，不把 `requires_human` 当作可直接发布的医疗答复。

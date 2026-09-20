@@ -6,7 +6,7 @@
 
 | Gateway workflow | 条件 | Team path |
 | --- | --- | --- |
-| `single-agent-query` | 有已配置的模型路由，且不要求人工 | `simple`：Evidence → Response |
+| `single-agent-query` | 有已配置的模型路由，且不要求人工 | `simple`：Evidence → Safety → Response |
 | `clinical-review` | 有已配置的模型路由，且不要求人工 | `standard`：Intake/Triage → Evidence → Safety → Response |
 | `manual-escalation` | `RequiresHuman=true`，且没有模型路由 | `human_escalation`：Triage only |
 

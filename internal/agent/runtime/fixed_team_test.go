@@ -17,7 +17,7 @@ func TestFixedTeamCoordinatorExecutesClosedDAGWithPrivateInputs(t *testing.T) {
 		}
 	}
 	coordinator := &FixedTeamCoordinator{Tasks: tasks, Mailbox: mailbox, Team: FixedTeam{
-		Intake: agent("intake", `{"intake":"done"}`), Triage: agent("triage", `{"triage":"low"}`), Evidence: agent("evidence", `{"evidence":"found"}`), Safety: agent("safety", `{"safe":true}`), Response: agent("response", `{"answer":"ok"}`),
+		Intake: agent("intake", `{"intake":"done"}`), Triage: agent("triage", `{"triage":"low"}`), Evidence: agent("evidence", `{"evidence":"found"}`), Safety: agent("safety", `{"approved":true}`), Response: agent("response", `{"answer":"ok"}`),
 	}}
 	response, err := coordinator.Start(context.Background(), FixedTeamSpec{RunID: "run-a", Scope: Metadata{TenantID: "tenant-a", UserID: "user-a"}, Deadline: time.Now().Add(time.Hour)}, json.RawMessage(`{"question":"q"}`))
 	if err != nil {
@@ -32,7 +32,7 @@ func TestFixedTeamCoordinatorExecutesClosedDAGWithPrivateInputs(t *testing.T) {
 	if got, want := string(inputs["safety"]), `{"evidence":{"evidence":"found"}}`; got != want {
 		t.Fatalf("safety input = %s, want %s", got, want)
 	}
-	if got, want := string(inputs["response"]), `{"safety":{"safe":true}}`; got != want {
+	if got, want := string(inputs["response"]), `{"safety":{"approved":true}}`; got != want {
 		t.Fatalf("response input = %s, want %s", got, want)
 	}
 	for _, task := range tasks.dag.Tasks {
@@ -54,7 +54,7 @@ func TestFixedTeamCoordinatorPlansOnlyTrustedStaticPaths(t *testing.T) {
 		path  FixedTeamPath
 		types []string
 	}{
-		{FixedTeamPathSimple, []string{"evidence", "response"}},
+		{FixedTeamPathSimple, []string{"evidence", "safety", "response"}},
 		{FixedTeamPathStandard, []string{"intake", "triage", "evidence", "safety", "response"}},
 		{FixedTeamPathHuman, []string{"triage"}},
 	} {

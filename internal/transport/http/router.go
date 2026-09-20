@@ -22,6 +22,35 @@ func NewRouter(
 	sessionService *service.SessionService,
 	streamService *service.StreamService,
 ) *gin.Engine {
+	return newRouter(cfg, logger, authService, attachmentService, queryService, sessionService, streamService, nil, "")
+}
+
+// NewRouterWithTeam exposes the only public /query activation path. Callers
+// must supply a fully configured P5 Team application and its trusted tenant;
+// passing nil still fails closed and never enables the legacy query service.
+func NewRouterWithTeam(
+	cfg config.Config,
+	logger *zap.Logger,
+	authService *service.AuthService,
+	attachmentService *service.AttachmentService,
+	sessionService *service.SessionService,
+	team *service.TeamQueryApplication,
+	tenantID string,
+) *gin.Engine {
+	return newRouter(cfg, logger, authService, attachmentService, nil, sessionService, nil, team, tenantID)
+}
+
+func newRouter(
+	cfg config.Config,
+	logger *zap.Logger,
+	authService *service.AuthService,
+	attachmentService *service.AttachmentService,
+	queryService *service.QueryService,
+	sessionService *service.SessionService,
+	streamService *service.StreamService,
+	team *service.TeamQueryApplication,
+	tenantID string,
+) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(middleware.Recovery(logger))
@@ -35,9 +64,16 @@ func NewRouter(
 	tokenManager := token.NewManager(cfg.Auth)
 	authMW := middleware.Auth(cfg.Auth, tokenManager, logger)
 	ah := handlers.NewAuthHandler(authService, logger)
-	qh := handlers.NewQueryHandler(queryService, nil, logger)
+	// The legacy QueryService is deliberately not a public HTTP fallback.
+	// P5 wiring injects a configured Team application here; until then /query
+	// fails closed instead of directly calling a model and publishing a reply.
+	qh := handlers.NewQueryHandler(team, tenantID, cfg.HTTP.WriteTimeout, nil, logger)
 	sh := handlers.NewSessionHandler(sessionService, logger)
-	sth := handlers.NewStreamHandler(streamService, nil, cfg.RAG.DocumentWaitReadyTimeout, logger)
+	// P5 has no approved streaming Team protocol yet. Keep the public legacy
+	// stream route fail-closed rather than leave a direct model bypass beside
+	// the committed Team query path.
+	sth := handlers.NewStreamHandler(nil, nil, cfg.RAG.DocumentWaitReadyTimeout, logger)
+	rh := handlers.NewCommittedResponseHandler(team, tenantID, logger)
 	atth := handlers.NewAttachmentHandler(attachmentService, logger)
 
 	public := r.Group("/auth")
@@ -52,6 +88,7 @@ func NewRouter(
 	api.Use(authMW)
 	{
 		api.POST("/query", qh.Handle)
+		api.GET("/query/:run/replay", rh.Handle)
 		api.GET("/sessions", sh.ListSessions)
 		api.GET("/session/:id", sh.GetSession)
 		api.GET("/stream/:session", sth.Handle)

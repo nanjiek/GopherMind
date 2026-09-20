@@ -19,6 +19,7 @@ var ErrCommittedResponseConflict = errors.New("committed response already exists
 type CommittedResponseStore struct{ db *gorm.DB }
 
 var _ service.ReviewedResponseCommitter = (*CommittedResponseStore)(nil)
+var _ service.CommittedResponseReader = (*CommittedResponseStore)(nil)
 
 func NewCommittedResponseStore(db *gorm.DB) *CommittedResponseStore {
 	return &CommittedResponseStore{db: db}

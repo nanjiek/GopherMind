@@ -128,7 +128,9 @@ func TestHTTPQuerySmoke(t *testing.T) {
 	resp := httptest.NewRecorder()
 
 	router.ServeHTTP(resp, req)
-	require.Equal(t, http.StatusOK, resp.Code)
+	// Public /query must fail closed until the trusted P5 Team application is
+	// configured; it may not fall back to the legacy direct-model service.
+	require.Equal(t, http.StatusServiceUnavailable, resp.Code)
 }
 
 func (f *smokeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {

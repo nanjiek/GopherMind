@@ -6,7 +6,7 @@
 
 Lead 只接受 P3 的可信路径选择，固定拓扑为：
 
-- `simple`：`Evidence → Response`。
+- `simple`：`Evidence → Safety → Response`。P5 起，所有可发布答复都必须经过 Safety；该收紧由用户于 2026-09-20 明确确认。
 - `standard`：`Intake` 与 `Triage` → `Evidence` → `Safety` → `Response`。
 - `human_escalation`：只执行 `Triage`，返回结构化 `requires_human`，不启动 Evidence、Safety 或 Response。
 

@@ -23,6 +23,7 @@ type Config struct {
 	Pinecone    PineconeConfig
 	Langfuse    LangfuseConfig
 	Eval        EvalConfig
+	TeamQuery   TeamQueryConfig
 }
 
 type HTTPConfig struct {
@@ -141,6 +142,18 @@ type EvalConfig struct {
 	JudgeModelType string
 }
 
+// TeamQueryConfig enables the P5 public query path only when every trusted
+// routing input is explicitly configured. RulesJSON is parsed by the server
+// into deterministic policy rules; an empty value never falls back to legacy.
+type TeamQueryConfig struct {
+	Enabled           bool
+	TenantID          string
+	FastModelType     string
+	AdvancedModelType string
+	RulesJSON         string
+	Deadline          time.Duration
+}
+
 // Load 从环境变量读取配置并提供保守默认值。
 func Load() Config {
 	return Config{
@@ -249,6 +262,14 @@ func Load() Config {
 			Enabled:        getBool("EVAL_ENABLED", false),
 			SampleRate:     getFloat("EVAL_SAMPLE_RATE", 0.2),
 			JudgeModelType: getEnv("EVAL_JUDGE_MODEL_TYPE", "qwen"),
+		},
+		TeamQuery: TeamQueryConfig{
+			Enabled:           getBool("TEAM_QUERY_ENABLED", false),
+			TenantID:          getEnv("TEAM_QUERY_TENANT_ID", ""),
+			FastModelType:     getEnv("TEAM_QUERY_FAST_MODEL_TYPE", ""),
+			AdvancedModelType: getEnv("TEAM_QUERY_ADVANCED_MODEL_TYPE", ""),
+			RulesJSON:         getEnv("TEAM_QUERY_RULES_JSON", ""),
+			Deadline:          getDuration("TEAM_QUERY_DEADLINE", 30*time.Second),
 		},
 	}
 }
