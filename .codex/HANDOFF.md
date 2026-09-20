@@ -125,7 +125,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P4 final fixed multi-Agent execution is merged in PR #24 at `6badaa9`: Lead chooses only trusted static `simple` (Evidence → Response), `standard` (Intake/Triage → Evidence → Safety → Response), or `human_escalation` (Triage only) DAGs; pure fixed workers claim Task/Mailbox work, receive only dependency-allowed structured data, persist results, and resume without re-executing succeeded Tasks. No model-driven delegation, external effect, or dynamic topology is introduced. P4 is complete at this merge.
 - The P5–P7 plan is revised in `docs/ai-upgrade-plan-v3.zh.md`: P5 first connects trusted routing, fixed Team execution, safe response commit/replay, Durable Action/Event-Outbox and its database/race gates; Compaction follows that live execution boundary. P6 remains authority-first memory/knowledge governance. P7 retains capacity, evaluation and release governance rather than deferring basic correctness tests.
 - P5.1 route-to-Team bridge is merged in PR #25 at `3c812f9`: P3 `single-agent-query`, `clinical-review`, and `manual-escalation` Decisions map only to P4 `simple`, `standard`, and `human_escalation` paths respectively; contradictory or forged Decisions are rejected before any Team execution.
-- P5.2 trusted routed-Team Query entry is implemented on `codex/p5-step2-query-team-entry`: it requires trusted P3 risk/task attributes and trusted tenant/user scope, reroutes them and starts only the derived P4 path. Its result is explicitly uncommitted; a human handoff is never published as an assistant response. No HTTP caller, model, or payload can choose a Decision/path, and this node neither runs legacy Query effects nor introduces a response-commit barrier, Outbox, replay, or PostgreSQL wiring.
+- P5.2 trusted routed-Team Query entry is submitted as PR #26: it requires trusted P3 risk/task attributes and trusted tenant/user scope, reroutes them and starts only the derived P4 path. Its result is explicitly uncommitted; a human handoff is never published as an assistant response. No HTTP caller, model, or payload can choose a Decision/path, and this node neither runs legacy Query effects nor introduces a response-commit barrier, Outbox, replay, or PostgreSQL wiring.
 
 ## Current state
 
@@ -148,6 +148,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #23 is merged: `codex/p4-complete-reliable-coordination` -> `codex/p1-step2-event-surface` at `9a2ba1ceb6e26eb01da97cae448d16e583d091ab`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/23.
 - PR #24 is merged: `codex/p4-final-fixed-team-execution` -> `codex/p1-step2-event-surface` at `6badaa97f207236440530669c7e0e4d51a95c9c4`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/24.
 - PR #25 is merged: `codex/p5-step1-route-team-bridge` -> `codex/p1-step2-event-surface` at `3c812f90e89b8943a21bb7410cf980c7ec6eb34e` — https://github.com/nanjiek/GopherMind/pull/25.
+- PR #26 is open: `codex/p5-step2-query-team-entry` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/26.
 
 ## Validation
 
