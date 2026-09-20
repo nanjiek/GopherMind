@@ -18,7 +18,7 @@ func NewRouter(
 	logger *zap.Logger,
 	authService *service.AuthService,
 	attachmentService *service.AttachmentService,
-	queryService *service.QueryService,
+	_ *service.QueryService,
 	sessionService *service.SessionService,
 	streamService *service.StreamService,
 ) *gin.Engine {
@@ -35,7 +35,10 @@ func NewRouter(
 	tokenManager := token.NewManager(cfg.Auth)
 	authMW := middleware.Auth(cfg.Auth, tokenManager, logger)
 	ah := handlers.NewAuthHandler(authService, logger)
-	qh := handlers.NewQueryHandler(queryService, nil, logger)
+	// The legacy QueryService is deliberately not a public HTTP fallback.
+	// P5 wiring injects a configured Team application here; until then /query
+	// fails closed instead of directly calling a model and publishing a reply.
+	qh := handlers.NewQueryHandler(nil, "", 0, nil, logger)
 	sh := handlers.NewSessionHandler(sessionService, logger)
 	sth := handlers.NewStreamHandler(streamService, nil, cfg.RAG.DocumentWaitReadyTimeout, logger)
 	atth := handlers.NewAttachmentHandler(attachmentService, logger)

@@ -110,8 +110,8 @@ func TestQueryHandler_Handle(t *testing.T) {
 	repo := &handlerFakeRepo{}
 	cache := &handlerFakeCache{}
 	sessionSvc := service.NewSessionService(repo, cache, nil)
-	querySvc := service.NewQueryService(repo, sessionSvc, &handlerFakeRouter{}, &handlerFakeRAG{}, &handlerFakeQueue{}, cache, nil, nil, nil, nil)
-	handler := NewQueryHandler(querySvc, nil, nil)
+	_ = service.NewQueryService(repo, sessionSvc, &handlerFakeRouter{}, &handlerFakeRAG{}, &handlerFakeQueue{}, cache, nil, nil, nil, nil)
+	handler := NewQueryHandler(nil, "", 0, nil, nil)
 
 	r := gin.New()
 	r.POST("/query", func(c *gin.Context) {
@@ -126,10 +126,10 @@ func TestQueryHandler_Handle(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
 	var resp httpcontracts.APIResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, 0, resp.Code)
+	require.Equal(t, 50321, resp.Code)
 }
 
 func (f *handlerFakeCache) GetWindow(_ context.Context, _, _ string) ([]model.Message, bool, error) {

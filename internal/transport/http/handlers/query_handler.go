@@ -1,26 +1,29 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"gophermind/internal/core/model"
 	"gophermind/internal/core/service"
 	httpcontracts "gophermind/pkg/contracts/http"
 )
 
 // QueryHandler handles /query.
 type QueryHandler struct {
-	svc       *service.QueryService
+	team      *service.TeamQueryApplication
+	tenantID  string
+	deadline  time.Duration
 	documents *service.DocumentService
 	logger    *zap.Logger
 }
 
 // NewQueryHandler builds QueryHandler.
-func NewQueryHandler(svc *service.QueryService, documents *service.DocumentService, logger *zap.Logger) *QueryHandler {
-	return &QueryHandler{svc: svc, documents: documents, logger: logger}
+func NewQueryHandler(team *service.TeamQueryApplication, tenantID string, deadline time.Duration, documents *service.DocumentService, logger *zap.Logger) *QueryHandler {
+	return &QueryHandler{team: team, tenantID: tenantID, deadline: deadline, documents: documents, logger: logger}
 }
 
 // Handle executes synchronous QA.
@@ -34,6 +37,10 @@ func (h *QueryHandler) Handle(c *gin.Context) {
 	userID := c.GetString("user_id")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, httpcontracts.Err(40103, "missing user id"))
+		return
+	}
+	if h.team == nil || h.tenantID == "" {
+		c.JSON(http.StatusServiceUnavailable, httpcontracts.Err(50321, "trusted team query path unavailable"))
 		return
 	}
 
@@ -57,14 +64,11 @@ func (h *QueryHandler) Handle(c *gin.Context) {
 		}
 	}
 
-	out, err := h.svc.Query(c.Request.Context(), model.QueryInput{
-		UserID:     userID,
-		SessionID:  req.SessionID,
-		DocumentID: req.DocumentID,
-		Question:   req.Question,
-		ModelType:  req.ModelType,
-		UseRAG:     req.UseRAG,
-	})
+	deadline := h.deadline
+	if deadline <= 0 {
+		deadline = 30 * time.Second
+	}
+	out, err := h.team.Execute(c.Request.Context(), service.TrustedQueryPolicyInput{Identity: service.TrustedQueryIdentity{TenantID: h.tenantID, UserID: userID, SessionID: req.SessionID}, RunID: c.GetString("request_id"), Deadline: time.Now().Add(deadline), Question: req.Question, DocumentID: req.DocumentID})
 	if err != nil {
 		if h.logger != nil {
 			h.logger.Error("query failed", zap.Error(err))
@@ -73,24 +77,21 @@ func (h *QueryHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	citations := make([]httpcontracts.CitationResponse, 0, len(out.Citations))
-	for _, ct := range out.Citations {
-		citations = append(citations, httpcontracts.CitationResponse{
-			DocID:   ct.DocID,
-			ChunkID: ct.ChunkID,
-			Score:   ct.Score,
-		})
+	if out.RequiresHuman {
+		c.JSON(http.StatusAccepted, httpcontracts.APIResponse{Code: 20231, Message: "human review required", Data: gin.H{"requires_human": true, "request_id": c.GetString("request_id")}})
+		return
+	}
+	var response struct {
+		Answer string `json:"answer"`
+	}
+	if json.Unmarshal(out.Data, &response) != nil || response.Answer == "" {
+		c.JSON(http.StatusInternalServerError, httpcontracts.Err(50001, "committed response invalid"))
+		return
 	}
 
 	c.JSON(http.StatusOK, httpcontracts.OK(httpcontracts.QueryData{
-		SessionID: out.SessionID,
-		Answer:    out.Answer,
-		Citations: citations,
-		Usage: httpcontracts.UsageResponse{
-			Provider:     out.Usage.Provider,
-			InputTokens:  out.Usage.InputTokens,
-			OutputTokens: out.Usage.OutputTokens,
-		},
-		RequestID: out.RequestID,
+		SessionID: req.SessionID,
+		Answer:    response.Answer,
+		RequestID: c.GetString("request_id"),
 	}))
 }
