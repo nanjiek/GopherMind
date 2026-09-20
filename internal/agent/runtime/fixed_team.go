@@ -135,7 +135,8 @@ func (c *FixedTeamCoordinator) plan(spec FixedTeamSpec, request json.RawMessage)
 	case FixedTeamPathSimple:
 		return NewTaskDAG(TaskDAG{RunID: spec.RunID, Scope: spec.Scope, Tasks: []AgentTask{
 			{TaskID: evidenceID, Type: "evidence", OwnerAgentID: TeamAgentEvidence, IdempotencyKey: spec.RunID + ":evidence", Revision: 1, Deadline: spec.Deadline, Input: cloneJSON(request)},
-			{TaskID: responseID, Type: "response", OwnerAgentID: TeamAgentResponse, IdempotencyKey: spec.RunID + ":response", Revision: 1, Deadline: spec.Deadline, BlockedBy: []string{evidenceID}},
+			{TaskID: safetyID, Type: "safety", OwnerAgentID: TeamAgentSafety, IdempotencyKey: spec.RunID + ":safety", Revision: 1, Deadline: spec.Deadline, BlockedBy: []string{evidenceID}},
+			{TaskID: responseID, Type: "response", OwnerAgentID: TeamAgentResponse, IdempotencyKey: spec.RunID + ":response", Revision: 1, Deadline: spec.Deadline, BlockedBy: []string{safetyID}},
 		}})
 	case FixedTeamPathHuman:
 		return NewTaskDAG(TaskDAG{RunID: spec.RunID, Scope: spec.Scope, Tasks: []AgentTask{
