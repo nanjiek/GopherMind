@@ -103,6 +103,8 @@ P5 的前置条件是 P4 的固定多 Agent Team 已合并：可信 P3 路由决
 
 - P6 的第一个设计/实现单元是“医疗文档解析、格式感知分块与证据分级”，详见 `docs/design/p6-medical-document-chunking.zh.md`。先识别真实格式并生成带页码、标题路径、版本、适用人群、来源和 OCR 置信度的文档树，再按指南/白皮书、论文、药品说明书、病历、检验报告、结构化数据、网页和扫描件各自的语义边界分块；禁止将所有格式降级成同一种固定字符切分。
 - 每个块必须具备可定位来源和 A–E 证据等级。检索先按 tenant、患者/机构授权、撤回/过期状态过滤，再综合相关性、权威性、版本和适用人群排序；Evidence 输出证据包，Safety 在模型发布前检查证据等级、版本、单位与人群匹配。向量库仅做召回，不能决定事实或可用性。
+- P6 的第二个设计/实现单元是“短期上下文与长期记忆治理”，详见 `docs/design/p6-memory-governance.zh.md`。短期上下文由最近原始对话、带事件水位/版本的结构化摘要和按需历史片段组成，受明确 token 预算约束；长期记忆按类型、来源、范围和 `candidate/confirmed/conflicted/expired/retracted` 状态治理，模型只能提出 candidate，不能自动确认医疗事实。
+- PostgreSQL 是摘要和长期记忆的权威；向量库只负责异步召回。召回前先做 tenant、患者/机构授权、状态、时间和适用人群过滤，Evidence 接收带来源和不确定性的记忆包，Safety 阻止 candidate、过期或越权记忆被说成确定事实。
 - 在 P5 的安全输出提交后增加 candidate/confirmed/conflicted/expired/retracted 等状态、来源证据、版本与确认 API/UI。模型推断只可成为 candidate，不能自动写成已确认病史。
 - PostgreSQL 权威库先提交，事务 Outbox 异步更新 Pinecone；召回后回查权威状态与权限，过滤撤回/删除/过期记录。新旧索引都不得反向决定事实状态。
 - 新系统不导入旧记忆；所有患者记忆从 PostgreSQL 空库重新建立，模型推断不能自动成为已确认病史。
