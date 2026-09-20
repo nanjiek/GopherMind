@@ -127,7 +127,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P5.1 route-to-Team bridge is merged in PR #25 at `3c812f9`: P3 `single-agent-query`, `clinical-review`, and `manual-escalation` Decisions map only to P4 `simple`, `standard`, and `human_escalation` paths respectively; contradictory or forged Decisions are rejected before any Team execution.
 - P5.2 trusted routed-Team Query entry is merged in PR #26 at `2ff6301`: it requires trusted P3 risk/task attributes and trusted tenant/user scope, reroutes them and starts only the derived P4 path. Its result is explicitly uncommitted; a human handoff is never published as an assistant response. No HTTP caller, model, or payload can choose a Decision/path, and this node neither runs legacy Query effects nor introduces a response-commit barrier, Outbox, replay, or PostgreSQL wiring.
 - P5.3 trusted deterministic Query policy is merged in PR #27 at `55f8e99`: only configured, validated phrase rules can construct P5.2 route input from authenticated tenant/user/session scope and ordinary question content. Unknown or equal-priority conflicting matches fail closed; no client body or model output can set risk, task, scope, Decision, or Team path. The node has no built-in clinical phrase set and makes no external call.
-- P5.4 response commit barrier is implemented on `codex/p5-step4-response-commit-barrier`: a Team result is uncommitted until a trusted review verifier accepts its complete answer schema, and Capability is reauthorized immediately before the sole committer invocation. Human escalation, invalid output, failed review, and revoked Capability do not call the committer.
+- P5.4 response commit barrier is submitted as PR #28: a Team result is uncommitted until a trusted review verifier accepts its complete answer schema, and Capability is reauthorized immediately before the sole committer invocation. Human escalation, invalid output, failed review, and revoked Capability do not call the committer.
 
 ## Current state
 
@@ -152,6 +152,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #25 is merged: `codex/p5-step1-route-team-bridge` -> `codex/p1-step2-event-surface` at `3c812f90e89b8943a21bb7410cf980c7ec6eb34e` — https://github.com/nanjiek/GopherMind/pull/25.
 - PR #26 is merged: `codex/p5-step2-query-team-entry` -> `codex/p1-step2-event-surface` at `2ff6301090ca21c70dbd87c59315dce700d213ff`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/26.
 - PR #27 is merged: `codex/p5-step3-trusted-query-policy` -> `codex/p1-step2-event-surface` at `55f8e99fa32756920d7008b6184cf2131e2b95f3`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/27.
+- PR #28 is open: `codex/p5-step4-response-commit-barrier` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/28.
 
 ## Validation
 
