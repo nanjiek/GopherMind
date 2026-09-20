@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -26,22 +27,24 @@ var _ interface {
 func NewTaskDAGStore(db *gorm.DB) *TaskDAGStore { return &TaskDAGStore{db: db} }
 
 type agentTaskRow struct {
-	ID             string     `gorm:"column:id;primaryKey"`
-	RunID          string     `gorm:"column:run_id"`
-	Type           string     `gorm:"column:task_type"`
-	OwnerAgentID   string     `gorm:"column:owner_agent_id"`
-	IdempotencyKey string     `gorm:"column:idempotency_key"`
-	Status         string     `gorm:"column:status"`
-	Revision       int64      `gorm:"column:revision"`
-	LeaseOwner     string     `gorm:"column:lease_owner"`
-	LeaseEpoch     int64      `gorm:"column:lease_epoch"`
-	LeaseExpiresAt *time.Time `gorm:"column:lease_expires_at"`
-	Attempts       int        `gorm:"column:attempts"`
-	ErrorCode      string     `gorm:"column:error_code"`
-	CompletedAt    *time.Time `gorm:"column:completed_at"`
-	Deadline       time.Time  `gorm:"column:deadline_at"`
-	CreatedAt      time.Time  `gorm:"column:created_at"`
-	UpdatedAt      time.Time  `gorm:"column:updated_at"`
+	ID             string          `gorm:"column:id;primaryKey"`
+	RunID          string          `gorm:"column:run_id"`
+	Type           string          `gorm:"column:task_type"`
+	OwnerAgentID   string          `gorm:"column:owner_agent_id"`
+	IdempotencyKey string          `gorm:"column:idempotency_key"`
+	Status         string          `gorm:"column:status"`
+	Revision       int64           `gorm:"column:revision"`
+	LeaseOwner     string          `gorm:"column:lease_owner"`
+	LeaseEpoch     int64           `gorm:"column:lease_epoch"`
+	LeaseExpiresAt *time.Time      `gorm:"column:lease_expires_at"`
+	Attempts       int             `gorm:"column:attempts"`
+	ErrorCode      string          `gorm:"column:error_code"`
+	CompletedAt    *time.Time      `gorm:"column:completed_at"`
+	Deadline       time.Time       `gorm:"column:deadline_at"`
+	Input          json.RawMessage `gorm:"column:task_input;type:jsonb"`
+	Output         json.RawMessage `gorm:"column:task_output;type:jsonb"`
+	CreatedAt      time.Time       `gorm:"column:created_at"`
+	UpdatedAt      time.Time       `gorm:"column:updated_at"`
 }
 
 func (agentTaskRow) TableName() string { return "agent_tasks" }
@@ -78,9 +81,13 @@ func (s *TaskDAGStore) Create(ctx context.Context, dag runtime.TaskDAG) (runtime
 			return runtime.ErrTaskDAGNotFound
 		}
 		for _, task := range validated.Tasks {
+			input := append(json.RawMessage(nil), task.Input...)
+			if len(input) == 0 {
+				input = json.RawMessage(`{}`)
+			}
 			row := agentTaskRow{
 				ID: task.TaskID, RunID: validated.RunID, Type: task.Type, OwnerAgentID: task.OwnerAgentID,
-				IdempotencyKey: task.IdempotencyKey, Status: string(task.Status), Revision: task.Revision, Deadline: task.Deadline,
+				IdempotencyKey: task.IdempotencyKey, Status: string(task.Status), Revision: task.Revision, Deadline: task.Deadline, Input: input,
 				CreatedAt: now, UpdatedAt: now,
 			}
 			if err := tx.Create(&row).Error; err != nil {
@@ -167,11 +174,11 @@ func (s *TaskDAGStore) Claim(ctx context.Context, scope runtime.Metadata, taskID
 // Complete accepts only the current, unexpired fenced lease. Success releases
 // direct dependents whose entire dependency set has succeeded; a failed or
 // cancelled Task releases nothing.
-func (s *TaskDAGStore) Complete(ctx context.Context, scope runtime.Metadata, taskID string, expectedRevision, fencingToken int64, status runtime.TaskStatus, errorCode string) (runtime.AgentTask, error) {
+func (s *TaskDAGStore) Complete(ctx context.Context, scope runtime.Metadata, taskID string, expectedRevision, fencingToken int64, completion runtime.TaskCompletion) (runtime.AgentTask, error) {
 	if s == nil || s.db == nil {
 		return runtime.AgentTask{}, errors.New("task DAG store is nil")
 	}
-	if err := validateTaskCompletion(scope, taskID, expectedRevision, fencingToken, status, errorCode); err != nil {
+	if err := validateTaskCompletion(scope, taskID, expectedRevision, fencingToken, completion); err != nil {
 		return runtime.AgentTask{}, err
 	}
 	now := time.Now().UTC()
@@ -189,7 +196,7 @@ func (s *TaskDAGStore) Complete(ctx context.Context, scope runtime.Metadata, tas
 		}
 		nextRevision := row.Revision + 1
 		result := tx.Model(&agentTaskRow{}).Where("id = ? AND revision = ? AND lease_epoch = ?", taskID, expectedRevision, fencingToken).Updates(map[string]any{
-			"status": string(status), "revision": nextRevision, "error_code": errorCode, "completed_at": now,
+			"status": string(completion.Status), "revision": nextRevision, "error_code": completion.ErrorCode, "task_output": completion.Output, "completed_at": now,
 			"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
 		})
 		if result.Error != nil {
@@ -198,14 +205,15 @@ func (s *TaskDAGStore) Complete(ctx context.Context, scope runtime.Metadata, tas
 		if result.RowsAffected != 1 {
 			return runtime.ErrTaskDAGConflict
 		}
-		if status == runtime.TaskSucceeded {
+		if completion.Status == runtime.TaskSucceeded {
 			if err := releaseSatisfiedDependents(tx, row.RunID, now); err != nil {
 				return err
 			}
 		}
 		completed = taskFromRow(row)
-		completed.Status = status
+		completed.Status = completion.Status
 		completed.Revision = nextRevision
+		completed.Output = append(json.RawMessage(nil), completion.Output...)
 		return nil
 	})
 	if err != nil {
@@ -296,7 +304,7 @@ func (s *TaskDAGStore) Load(ctx context.Context, scope runtime.Metadata, runID s
 	for _, row := range rows {
 		dag.Tasks = append(dag.Tasks, runtime.AgentTask{
 			TaskID: row.ID, Type: row.Type, OwnerAgentID: row.OwnerAgentID, IdempotencyKey: row.IdempotencyKey,
-			Status: runtime.TaskStatus(row.Status), Revision: row.Revision, Deadline: row.Deadline, BlockedBy: dependencies[row.ID],
+			Status: runtime.TaskStatus(row.Status), Revision: row.Revision, Deadline: row.Deadline, Input: append(json.RawMessage(nil), row.Input...), Output: append(json.RawMessage(nil), row.Output...), BlockedBy: dependencies[row.ID],
 		})
 	}
 	validated, err := runtime.ValidateStoredTaskDAG(dag)
@@ -375,17 +383,23 @@ func validateTaskScope(scope runtime.Metadata) error {
 	return nil
 }
 
-func validateTaskCompletion(scope runtime.Metadata, taskID string, expectedRevision, fencingToken int64, status runtime.TaskStatus, errorCode string) error {
+func validateTaskCompletion(scope runtime.Metadata, taskID string, expectedRevision, fencingToken int64, completion runtime.TaskCompletion) error {
 	if err := validateTaskClaim(scope, taskID, expectedRevision, "completion", time.Nanosecond); err != nil {
 		return err
 	}
-	if fencingToken < 1 || (status != runtime.TaskSucceeded && status != runtime.TaskFailed && status != runtime.TaskCancelled) {
+	if fencingToken < 1 || (completion.Status != runtime.TaskSucceeded && completion.Status != runtime.TaskFailed && completion.Status != runtime.TaskCancelled) {
 		return fmt.Errorf("%w: positive fencing token and terminal task status are required", runtime.ErrInvalidTaskDAG)
 	}
-	if status == runtime.TaskSucceeded && errorCode != "" {
+	if completion.Status == runtime.TaskSucceeded && (completion.ErrorCode != "" || !validRuntimeTaskOutput(completion.Output)) {
+		return fmt.Errorf("%w: successful task requires structured output and no error code", runtime.ErrInvalidTaskDAG)
+	}
+	if completion.Status != runtime.TaskSucceeded && len(completion.Output) != 0 {
+		return fmt.Errorf("%w: non-successful task cannot have output", runtime.ErrInvalidTaskDAG)
+	}
+	if completion.Status == runtime.TaskSucceeded && completion.ErrorCode != "" {
 		return fmt.Errorf("%w: successful task cannot have an error code", runtime.ErrInvalidTaskDAG)
 	}
-	if status != runtime.TaskSucceeded && errorCode == "" {
+	if completion.Status != runtime.TaskSucceeded && completion.ErrorCode == "" {
 		return fmt.Errorf("%w: non-successful task requires an error code", runtime.ErrInvalidTaskDAG)
 	}
 	return nil
@@ -408,7 +422,15 @@ func loadScopedTaskForUpdate(tx *gorm.DB, scope runtime.Metadata, taskID string)
 }
 
 func taskFromRow(row agentTaskRow) runtime.AgentTask {
-	return runtime.AgentTask{TaskID: row.ID, Type: row.Type, OwnerAgentID: row.OwnerAgentID, IdempotencyKey: row.IdempotencyKey, Status: runtime.TaskStatus(row.Status), Revision: row.Revision, Deadline: row.Deadline}
+	return runtime.AgentTask{TaskID: row.ID, Type: row.Type, OwnerAgentID: row.OwnerAgentID, IdempotencyKey: row.IdempotencyKey, Status: runtime.TaskStatus(row.Status), Revision: row.Revision, Deadline: row.Deadline, Input: append(json.RawMessage(nil), row.Input...), Output: append(json.RawMessage(nil), row.Output...)}
+}
+
+func validRuntimeTaskOutput(value json.RawMessage) bool {
+	if len(value) == 0 || !json.Valid(value) {
+		return false
+	}
+	var object map[string]json.RawMessage
+	return json.Unmarshal(value, &object) == nil && object != nil
 }
 
 func releaseSatisfiedDependents(tx *gorm.DB, runID string, now time.Time) error {
