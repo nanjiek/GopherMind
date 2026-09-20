@@ -133,9 +133,9 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Current state
 
-- P5 completion is merged in PR #30 at `5e65b519`: trusted public fixed-Team execution, Safety-gated atomic response/Outbox commit, scoped replay, and bounded Compaction CAS are in the base branch. The next work item is P6.1 medical-document parsing, format-aware chunking, evidence grading and governed retrieval; its design is `docs/design/p6-medical-document-chunking.zh.md`.
+- P5 completion is merged in PR #30 at `5e65b519`: trusted public fixed-Team execution, Safety-gated atomic response/Outbox commit, scoped replay, and bounded Compaction CAS are in the base branch. P6.1 medical-document parsing, format-aware chunking, evidence grading and governed retrieval is merged in PR #31 at `d9230cf`; its design is `docs/design/p6-medical-document-chunking.zh.md`. P6.2 now specifies structured short-term context plus authority-first long-term memory in `docs/design/p6-memory-governance.zh.md`.
 
-- Working tree: P6.1 documentation planning is in progress on `codex/p6-medical-document-chunking-plan`.
+- Working tree: P6.2 memory-governance documentation planning is in progress on `codex/p6-memory-governance-plan`.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -159,6 +159,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #28 is merged: `codex/p5-step4-response-commit-barrier` -> `codex/p1-step2-event-surface` at `6607354` — https://github.com/nanjiek/GopherMind/pull/28.
 - PR #29 is merged: `codex/p5-step5-committed-response-store` -> `codex/p1-step2-event-surface` at `e42d178` — https://github.com/nanjiek/GopherMind/pull/29.
 - PR #30 is merged: `codex/p5-complete-execution-boundary` -> `codex/p1-step2-event-surface` at `5e65b519` — https://github.com/nanjiek/GopherMind/pull/30.
+- PR #31 is merged: `codex/p6-medical-document-chunking-plan` -> `codex/p1-step2-event-surface` at `d9230cf` — https://github.com/nanjiek/GopherMind/pull/31.
 
 ## Validation
 
@@ -220,7 +221,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 
 ## Next actions
 
-1. Review and merge P6.1’s document-parsing, format-aware chunking and evidence-grade design, then implement it from PostgreSQL authority outward.
+1. Review and merge P6.2’s short-term-context and long-term-memory governance design, then implement P6.1 and P6.2 from PostgreSQL authority outward.
 2. Before any future Outbox delivery, OCR, parser, external index or Compaction model summarizer, add an immediate Capability check at that external-effect adapter.
 3. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
