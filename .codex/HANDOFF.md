@@ -125,11 +125,12 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - P4 final fixed multi-Agent execution is merged in PR #24 at `6badaa9`: Lead chooses only trusted static `simple` (Evidence → Response), `standard` (Intake/Triage → Evidence → Safety → Response), or `human_escalation` (Triage only) DAGs; pure fixed workers claim Task/Mailbox work, receive only dependency-allowed structured data, persist results, and resume without re-executing succeeded Tasks. No model-driven delegation, external effect, or dynamic topology is introduced. P4 is complete at this merge.
 - The P5–P7 plan is revised in `docs/ai-upgrade-plan-v3.zh.md`: P5 first connects trusted routing, fixed Team execution, safe response commit/replay, Durable Action/Event-Outbox and its database/race gates; Compaction follows that live execution boundary. P6 remains authority-first memory/knowledge governance. P7 retains capacity, evaluation and release governance rather than deferring basic correctness tests.
 - P5.1 route-to-Team bridge is merged in PR #25 at `3c812f9`: P3 `single-agent-query`, `clinical-review`, and `manual-escalation` Decisions map only to P4 `simple`, `standard`, and `human_escalation` paths respectively; contradictory or forged Decisions are rejected before any Team execution.
-- P5.2 trusted routed-Team Query entry is submitted as PR #26: it requires trusted P3 risk/task attributes and trusted tenant/user scope, reroutes them and starts only the derived P4 path. Its result is explicitly uncommitted; a human handoff is never published as an assistant response. No HTTP caller, model, or payload can choose a Decision/path, and this node neither runs legacy Query effects nor introduces a response-commit barrier, Outbox, replay, or PostgreSQL wiring.
+- P5.2 trusted routed-Team Query entry is merged in PR #26 at `2ff6301`: it requires trusted P3 risk/task attributes and trusted tenant/user scope, reroutes them and starts only the derived P4 path. Its result is explicitly uncommitted; a human handoff is never published as an assistant response. No HTTP caller, model, or payload can choose a Decision/path, and this node neither runs legacy Query effects nor introduces a response-commit barrier, Outbox, replay, or PostgreSQL wiring.
+- P5.3 trusted deterministic Query policy is implemented on `codex/p5-step3-trusted-query-policy`: only configured, validated phrase rules can construct P5.2 route input from authenticated tenant/user/session scope and ordinary question content. Unknown or equal-priority conflicting matches fail closed; no client body or model output can set risk, task, scope, Decision, or Team path. The node has no built-in clinical phrase set and makes no external call.
 
 ## Current state
 
-- Working tree: clean after P5.2 trusted routed-Team Query entry is committed and pushed.
+- Working tree: clean after P5.3 trusted deterministic Query policy is committed and pushed.
 - PR chain: #7 and #8 are merged (verified through GitHub API on 2026-09-18). PR #3 remains an older draft.
 - PR #9 is merged: `codex/p2-step1-runtime-lifecycle` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/9.
 - PR #10 is merged: `codex/p2-step2-component-startup` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/10.
@@ -148,7 +149,7 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - PR #23 is merged: `codex/p4-complete-reliable-coordination` -> `codex/p1-step2-event-surface` at `9a2ba1ceb6e26eb01da97cae448d16e583d091ab`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/23.
 - PR #24 is merged: `codex/p4-final-fixed-team-execution` -> `codex/p1-step2-event-surface` at `6badaa97f207236440530669c7e0e4d51a95c9c4`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/24.
 - PR #25 is merged: `codex/p5-step1-route-team-bridge` -> `codex/p1-step2-event-surface` at `3c812f90e89b8943a21bb7410cf980c7ec6eb34e` — https://github.com/nanjiek/GopherMind/pull/25.
-- PR #26 is open: `codex/p5-step2-query-team-entry` -> `codex/p1-step2-event-surface` — https://github.com/nanjiek/GopherMind/pull/26.
+- PR #26 is merged: `codex/p5-step2-query-team-entry` -> `codex/p1-step2-event-surface` at `2ff6301090ca21c70dbd87c59315dce700d213ff`; GitHub `go` and `frontend` checks passed — https://github.com/nanjiek/GopherMind/pull/26.
 
 ## Validation
 
@@ -204,12 +205,13 @@ Upgrade GopherMind according to the V3 architecture plan. P0–P3 are complete. 
 - `go test ./...`, `go build ./cmd/...`, `go vet ./...`, and `git diff --check` — passed after P4 reliable coordination. PostgreSQL integration tests remain skipped locally because `POSTGRES_TEST_DSN` is unset.
 - `go test ./internal/core/service ./internal/agent/gateway ./internal/agent/runtime`, `go test ./...`, `go vet ./...`, and `git diff --check` — passed after P5 Step 2.
 - `go build ./cmd/...` — passed after P5 Step 2. `go test -race ./...` remains blocked locally before tests start because `CGO_ENABLED=0` and no C toolchain is installed; no toolchain installation was attempted.
+- `go test ./internal/core/service ./internal/agent/gateway`, `go test ./...`, `go build ./cmd/...`, `go vet ./...`, and `git diff --check` — passed after P5 Step 3. The local `-race` limitation is unchanged.
 
 ## Next actions
 
-1. Review and merge P5.2 after its required GitHub checks pass.
-2. Start P5.3: add the trusted deterministic policy/triage adapter that may construct routed-Team Query input for an API entry; do not allow the HTTP body or model output to set risk/task/scope.
-3. Then establish the response commit barrier before any assistant-message, stream, or queue publication can consume a Team result.
+1. Review and merge P5.3 after its required GitHub checks pass.
+2. Start P5.4: define the response commit-barrier contract before any assistant-message, stream, or queue publication can consume a Team result; retain the immediate Capability reauthorization requirement for every external effect.
+3. Then add durable committed-response/replay state and its PostgreSQL CAS store before public HTTP wiring.
 4. Run the exact race command on a Windows runner with a supported C toolchain before treating race coverage as complete.
 
 ## Blockers and risks
