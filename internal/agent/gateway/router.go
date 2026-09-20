@@ -102,8 +102,8 @@ func NewRouter(fast ModelRoute, advanced ModelRoute) (*Router, error) {
 // Red-flag requests never receive a model route: a later human-escalation
 // executor must handle them instead of treating an LLM as the triage authority.
 func (r *Router) Route(request Request) (Decision, error) {
-	if !request.Risk.valid() || !request.Task.valid() {
-		return Decision{}, ErrInvalidRouteRequest
+	if err := ValidateRequest(request); err != nil {
+		return Decision{}, err
 	}
 	version := request.WorkflowVersion
 	if version == "" {
@@ -123,6 +123,16 @@ func (r *Router) Route(request Request) (Decision, error) {
 	decision.Workflow = WorkflowSingleAgent
 	decision.Model = cloneRoute(r.fast)
 	return decision, nil
+}
+
+// ValidateRequest verifies the bounded trusted attributes accepted by the
+// Router. Policy adapters use it while loading static rules so a bad rule
+// cannot defer discovery until a request reaches an execution boundary.
+func ValidateRequest(request Request) error {
+	if !request.Risk.valid() || !request.Task.valid() {
+		return ErrInvalidRouteRequest
+	}
+	return nil
 }
 
 func validateModelRoute(route ModelRoute) error {
