@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestNewTaskDAGDerivesInitialStatesAndCopiesDependencies(t *testing.T) {
@@ -60,12 +61,23 @@ func TestNewTaskDAGRejectsDependencyCycle(t *testing.T) {
 	}
 }
 
+func TestValidateStoredTaskDAGAcceptsLifecycleState(t *testing.T) {
+	dag := testTaskDAG()
+	dag.Tasks[0].Status = TaskSucceeded
+	dag.Tasks[0].Revision = 3
+	dag.Tasks[1].Status = TaskReady
+	dag.Tasks[1].Revision = 2
+	if _, err := ValidateStoredTaskDAG(dag); err != nil {
+		t.Fatalf("ValidateStoredTaskDAG() error = %v", err)
+	}
+}
+
 func testTaskDAG() TaskDAG {
 	return TaskDAG{
 		RunID: "run-a", Scope: Metadata{TenantID: "tenant-a", UserID: "user-a", PatientID: "patient-a", SessionID: "session-a"},
 		Tasks: []AgentTask{
-			{TaskID: "intake", Type: "intake", OwnerAgentID: "intake-agent", IdempotencyKey: "intake-key", Revision: 1},
-			{TaskID: "evidence", Type: "evidence", OwnerAgentID: "evidence-agent", IdempotencyKey: "evidence-key", BlockedBy: []string{"intake"}, Revision: 1},
+			{TaskID: "intake", Type: "intake", OwnerAgentID: "intake-agent", IdempotencyKey: "intake-key", Revision: 1, Deadline: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{TaskID: "evidence", Type: "evidence", OwnerAgentID: "evidence-agent", IdempotencyKey: "evidence-key", BlockedBy: []string{"intake"}, Revision: 1, Deadline: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
 }

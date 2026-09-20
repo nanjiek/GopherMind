@@ -27,7 +27,7 @@ func TestMigrationsInitializeEmptySchemaAndAreRepeatable(t *testing.T) {
 
 	var versions int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM schema_migrations").Scan(&versions).Error)
-	require.Equal(t, int64(3), versions)
+	require.Equal(t, int64(4), versions)
 
 	var tables int64
 	require.NoError(t, db.Raw(`
@@ -55,8 +55,8 @@ func TestTaskDAGStoreCreatesLoadsAndScopesStaticGraph(t *testing.T) {
 
 	store := NewTaskDAGStore(db)
 	created, err := store.Create(context.Background(), runtime.TaskDAG{RunID: runID, Scope: scope, Tasks: []runtime.AgentTask{
-		{TaskID: "08d0d955-0ab9-4e4f-bf98-3266f837a15c", Type: "intake", OwnerAgentID: "intake-agent", IdempotencyKey: "intake", Revision: 1},
-		{TaskID: "5d9a7ed8-d5ea-4d97-bfc7-87dbd25bd9c0", Type: "evidence", OwnerAgentID: "evidence-agent", IdempotencyKey: "evidence", BlockedBy: []string{"08d0d955-0ab9-4e4f-bf98-3266f837a15c"}, Revision: 1},
+		{TaskID: "08d0d955-0ab9-4e4f-bf98-3266f837a15c", Type: "intake", OwnerAgentID: "intake-agent", IdempotencyKey: "intake", Revision: 1, Deadline: time.Now().Add(time.Hour)},
+		{TaskID: "5d9a7ed8-d5ea-4d97-bfc7-87dbd25bd9c0", Type: "evidence", OwnerAgentID: "evidence-agent", IdempotencyKey: "evidence", BlockedBy: []string{"08d0d955-0ab9-4e4f-bf98-3266f837a15c"}, Revision: 1, Deadline: time.Now().Add(time.Hour)},
 	}})
 	require.NoError(t, err)
 	require.Equal(t, runtime.TaskReady, created.Tasks[0].Status)
@@ -69,6 +69,76 @@ func TestTaskDAGStoreCreatesLoadsAndScopesStaticGraph(t *testing.T) {
 	wrongScope.UserID = "user-b"
 	_, err = store.Load(context.Background(), wrongScope, runID)
 	require.ErrorIs(t, err, runtime.ErrTaskDAGNotFound)
+}
+
+func TestDurableTaskAndMailboxUseCASFencingAndSeparateCompletion(t *testing.T) {
+	db, cleanup := isolatedTestSchema(t)
+	defer cleanup()
+	require.NoError(t, ApplyMigrations(context.Background(), db))
+
+	scope := runtime.Metadata{TenantID: "tenant-a", UserID: "user-a", PatientID: "patient-a", SessionID: "c96e73cf-345e-4eb6-8a05-b9f519799caa"}
+	require.NoError(t, db.Create(&SessionModel{ID: scope.SessionID, UserID: scope.UserID, Title: "coordination test"}).Error)
+	runID := "96c4f4d6-6ab8-4b5f-b1a4-9266a37eeb6b"
+	_, err := NewWorkflowCheckpointStore(db).Create(context.Background(), runtime.Checkpoint{RunID: runID, Scope: scope, WorkflowID: "fixed-workflow", WorkflowVersion: "v1", Status: runtime.RunRunning, CurrentNode: "evidence", Revision: 1, State: []byte(`{"state":"running"}`)})
+	require.NoError(t, err)
+
+	tasks := NewTaskDAGStore(db)
+	rootID := "08d0d955-0ab9-4e4f-bf98-3266f837a15c"
+	dependentID := "5d9a7ed8-d5ea-4d97-bfc7-87dbd25bd9c0"
+	timedOutID := "a8ced57a-c52f-4d07-8b59-79e17b2b695e"
+	_, err = tasks.Create(context.Background(), runtime.TaskDAG{RunID: runID, Scope: scope, Tasks: []runtime.AgentTask{
+		{TaskID: rootID, Type: "intake", OwnerAgentID: "intake-agent", IdempotencyKey: "intake", Revision: 1, Deadline: time.Now().Add(time.Hour)},
+		{TaskID: dependentID, Type: "evidence", OwnerAgentID: "evidence-agent", IdempotencyKey: "evidence", BlockedBy: []string{rootID}, Revision: 1, Deadline: time.Now().Add(time.Hour)},
+		{TaskID: timedOutID, Type: "review", OwnerAgentID: "review-agent", IdempotencyKey: "review", BlockedBy: []string{rootID}, Revision: 1, Deadline: time.Now().Add(-time.Minute)},
+	}})
+	require.NoError(t, err)
+	expired, err := tasks.ExpireBlocked(context.Background(), scope, runID, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, 1, expired)
+
+	rootLease, err := tasks.Claim(context.Background(), scope, rootID, 1, "worker-a", time.Minute)
+	require.NoError(t, err)
+	_, err = tasks.Complete(context.Background(), scope, rootID, rootLease.Task.Revision, rootLease.FencingToken, runtime.TaskSucceeded, "")
+	require.NoError(t, err)
+	loaded, err := tasks.Load(context.Background(), scope, runID)
+	require.NoError(t, err)
+	require.Equal(t, runtime.TaskReady, taskByID(t, loaded, dependentID).Status)
+	require.Equal(t, runtime.TaskCancelled, taskByID(t, loaded, timedOutID).Status)
+
+	leaseA, err := tasks.Claim(context.Background(), scope, dependentID, taskByID(t, loaded, dependentID).Revision, "worker-a", time.Minute)
+	require.NoError(t, err)
+	require.NoError(t, db.Exec("UPDATE agent_tasks SET lease_expires_at = now() - interval '1 second' WHERE id = ?", dependentID).Error)
+	leaseB, err := tasks.Claim(context.Background(), scope, dependentID, leaseA.Task.Revision, "worker-b", time.Minute)
+	require.NoError(t, err)
+	_, err = tasks.Complete(context.Background(), scope, dependentID, leaseA.Task.Revision, leaseA.FencingToken, runtime.TaskSucceeded, "")
+	require.ErrorIs(t, err, runtime.ErrTaskDAGConflict)
+	_, err = tasks.Complete(context.Background(), scope, dependentID, leaseB.Task.Revision, leaseB.FencingToken, runtime.TaskSucceeded, "")
+	require.NoError(t, err)
+
+	mailbox := NewDurableMailboxStore(db)
+	messageID := "1f500a42-fcc9-4860-a8ca-49c4f16667cc"
+	_, err = mailbox.Enqueue(context.Background(), runtime.AgentMessage{MessageID: messageID, RunID: runID, Scope: scope, SenderAgentID: "intake-agent", TargetAgentID: "evidence-agent", TaskID: dependentID, IdempotencyKey: "handoff-1", Revision: 1, Payload: []byte(`{"kind":"handoff"}`)})
+	require.NoError(t, err)
+	delivery, err := mailbox.Claim(context.Background(), scope, runID, "evidence-agent", "worker-a", time.Minute)
+	require.NoError(t, err)
+	acknowledged, err := mailbox.Acknowledge(context.Background(), scope, messageID, delivery.Message.Revision, delivery.FencingToken)
+	require.NoError(t, err)
+	require.Equal(t, runtime.MailboxDelivered, acknowledged.Status)
+
+	loaded, err = tasks.Load(context.Background(), scope, runID)
+	require.NoError(t, err)
+	require.Equal(t, runtime.TaskSucceeded, taskByID(t, loaded, dependentID).Status)
+}
+
+func taskByID(t *testing.T, dag runtime.TaskDAG, taskID string) runtime.AgentTask {
+	t.Helper()
+	for _, task := range dag.Tasks {
+		if task.TaskID == taskID {
+			return task
+		}
+	}
+	t.Fatalf("task %s missing", taskID)
+	return runtime.AgentTask{}
 }
 
 func TestWorkflowCheckpointStoreCreatesLoadsAndUsesCAS(t *testing.T) {

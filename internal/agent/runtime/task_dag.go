@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 )
 
 var (
@@ -12,17 +13,31 @@ var (
 	ErrTaskDAGCycle    = errors.New("runtime task DAG contains a dependency cycle")
 	ErrTaskDAGConflict = errors.New("runtime task DAG conflicts")
 	ErrTaskDAGNotFound = errors.New("runtime task DAG is not found")
+	ErrTaskNotReady    = errors.New("runtime task is not ready")
+	ErrTaskLease       = errors.New("runtime task lease conflicts")
 )
 
-// TaskStatus is deliberately limited to the initial dependency-derived state
-// in this contract. Claiming, completing, retrying, and timing out a task are
-// later Task Board and lease contracts.
+// TaskStatus is the persisted Task Board lifecycle. Only a successful Task
+// releases dependents; Mailbox delivery is deliberately not a Task transition.
 type TaskStatus string
 
 const (
-	TaskReady   TaskStatus = "ready"
-	TaskBlocked TaskStatus = "blocked"
+	TaskReady     TaskStatus = "ready"
+	TaskBlocked   TaskStatus = "blocked"
+	TaskRunning   TaskStatus = "running"
+	TaskSucceeded TaskStatus = "succeeded"
+	TaskFailed    TaskStatus = "failed"
+	TaskCancelled TaskStatus = "cancelled"
 )
+
+func (status TaskStatus) valid() bool {
+	switch status {
+	case TaskReady, TaskBlocked, TaskRunning, TaskSucceeded, TaskFailed, TaskCancelled:
+		return true
+	default:
+		return false
+	}
+}
 
 // AgentTask is the durable identity and static dependency declaration for one
 // unit of future Agent work. BlockedBy contains task IDs in the same DAG; it
@@ -35,6 +50,7 @@ type AgentTask struct {
 	BlockedBy      []string
 	Status         TaskStatus
 	Revision       int64
+	Deadline       time.Time
 }
 
 // TaskDAG is the trusted, scope-bound static task graph for one existing Run.
@@ -46,17 +62,59 @@ type TaskDAG struct {
 	Tasks []AgentTask
 }
 
-// TaskDAGStore is the durable boundary for a fully declared DAG. It does not
-// dispatch work, deliver Mailbox messages, or mutate task state.
+// TaskDAGStore is the durable boundary for a fully declared DAG.
 type TaskDAGStore interface {
 	Create(context.Context, TaskDAG) (TaskDAG, error)
 	Load(context.Context, Metadata, string) (TaskDAG, error)
+}
+
+// TaskBoard advances Task state through revision CAS and a fenced lease. It
+// never invokes an Agent or publishes a message; callers must perform effects
+// through their separately authorized executor boundary.
+type TaskBoard interface {
+	Claim(context.Context, Metadata, string, int64, string, time.Duration) (TaskLease, error)
+	Complete(context.Context, Metadata, string, int64, int64, TaskStatus, string) (AgentTask, error)
+	RecoverExpired(context.Context, Metadata, string, time.Time) (int, error)
+	ExpireBlocked(context.Context, Metadata, string, time.Time) (int, error)
+}
+
+// TaskLease proves a particular worker owns one unexpired Task attempt. The
+// fencing token is monotonic for that Task and must accompany completion.
+type TaskLease struct {
+	Task         AgentTask
+	WorkerID     string
+	FencingToken int64
+	ExpiresAt    time.Time
 }
 
 // NewTaskDAG validates static task identity and dependencies, derives each
 // initial state, and returns a defensively copied graph. A root is ready; any
 // task with dependencies is blocked until a later task-state contract exists.
 func NewTaskDAG(dag TaskDAG) (TaskDAG, error) {
+	result, err := validateTaskDAG(dag, true)
+	if err != nil {
+		return TaskDAG{}, err
+	}
+	for index := range result.Tasks {
+		expected := TaskReady
+		if len(result.Tasks[index].BlockedBy) != 0 {
+			expected = TaskBlocked
+		}
+		if result.Tasks[index].Status != "" && result.Tasks[index].Status != expected {
+			return TaskDAG{}, fmt.Errorf("%w: task %q status must be dependency-derived", ErrInvalidTaskDAG, result.Tasks[index].TaskID)
+		}
+		result.Tasks[index].Status = expected
+	}
+	return result, nil
+}
+
+// ValidateStoredTaskDAG validates a graph loaded from the durable Task Board.
+// Unlike NewTaskDAG, it accepts legal post-creation lifecycle states.
+func ValidateStoredTaskDAG(dag TaskDAG) (TaskDAG, error) {
+	return validateTaskDAG(dag, false)
+}
+
+func validateTaskDAG(dag TaskDAG, initial bool) (TaskDAG, error) {
 	if dag.RunID == "" || dag.Scope.TenantID == "" || dag.Scope.UserID == "" || len(dag.Tasks) == 0 {
 		return TaskDAG{}, fmt.Errorf("%w: run ID, trusted tenant/user scope, and tasks are required", ErrInvalidTaskDAG)
 	}
@@ -64,8 +122,14 @@ func NewTaskDAG(dag TaskDAG) (TaskDAG, error) {
 	taskByID := make(map[string]AgentTask, len(dag.Tasks))
 	idempotencyKeys := make(map[string]struct{}, len(dag.Tasks))
 	for _, task := range dag.Tasks {
-		if task.TaskID == "" || task.Type == "" || task.OwnerAgentID == "" || task.IdempotencyKey == "" || task.Revision != 1 {
-			return TaskDAG{}, fmt.Errorf("%w: task ID, type, owner, idempotency key, and revision 1 are required", ErrInvalidTaskDAG)
+		if task.TaskID == "" || task.Type == "" || task.OwnerAgentID == "" || task.IdempotencyKey == "" || task.Revision < 1 || task.Deadline.IsZero() {
+			return TaskDAG{}, fmt.Errorf("%w: task ID, type, owner, idempotency key, deadline, and positive revision are required", ErrInvalidTaskDAG)
+		}
+		if initial && task.Revision != 1 {
+			return TaskDAG{}, fmt.Errorf("%w: first task revision must be 1", ErrInvalidTaskDAG)
+		}
+		if !initial && !task.Status.valid() {
+			return TaskDAG{}, fmt.Errorf("%w: task %q has unknown status", ErrInvalidTaskDAG, task.TaskID)
 		}
 		if _, exists := taskByID[task.TaskID]; exists {
 			return TaskDAG{}, fmt.Errorf("%w: duplicate task ID %q", ErrInvalidTaskDAG, task.TaskID)
@@ -98,14 +162,6 @@ func NewTaskDAG(dag TaskDAG) (TaskDAG, error) {
 
 	result := cloneTaskDAG(dag)
 	for index := range result.Tasks {
-		expected := TaskReady
-		if len(result.Tasks[index].BlockedBy) != 0 {
-			expected = TaskBlocked
-		}
-		if result.Tasks[index].Status != "" && result.Tasks[index].Status != expected {
-			return TaskDAG{}, fmt.Errorf("%w: task %q status must be dependency-derived", ErrInvalidTaskDAG, result.Tasks[index].TaskID)
-		}
-		result.Tasks[index].Status = expected
 		sort.Strings(result.Tasks[index].BlockedBy)
 	}
 	return result, nil
