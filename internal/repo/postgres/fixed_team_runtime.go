@@ -35,11 +35,13 @@ func (r *FixedTeamRuntime) Start(ctx context.Context, spec runtime.FixedTeamSpec
 	if r == nil || r.coordinator == nil || r.checkpoints == nil {
 		return runtime.ResponseOutput{}, errors.New("fixed team runtime is nil")
 	}
-	_, err := r.checkpoints.Create(ctx, runtime.Checkpoint{RunID: spec.RunID, Scope: spec.Scope, WorkflowID: "fixed-team", WorkflowVersion: "v1", Status: runtime.RunRunning, Revision: 1, State: json.RawMessage(`{}`)})
+	requestScope := runtime.NewScope(ctx, spec.Scope)
+	defer requestScope.Close(context.Background())
+	_, err := r.checkpoints.Create(requestScope.Context(), runtime.Checkpoint{RunID: spec.RunID, Scope: spec.Scope, WorkflowID: "fixed-team", WorkflowVersion: "v1", Status: runtime.RunRunning, Revision: 1, State: json.RawMessage(`{}`)})
 	if err != nil {
 		return runtime.ResponseOutput{}, err
 	}
-	return r.coordinator.Start(ctx, spec, request)
+	return r.coordinator.Start(requestScope.Context(), spec, request)
 }
 
 func (r *FixedTeamRuntime) Resume(ctx context.Context, scope runtime.Metadata, runID string) (runtime.ResponseOutput, error) {
